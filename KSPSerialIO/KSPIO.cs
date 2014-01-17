@@ -31,6 +31,8 @@ namespace KSPSerialIO
         public float RAlt;          //15
         public float Fuelp;         //16
         public float Vsurf;         //17
+        public float Lat;           //18
+        public float Lon;           //19
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -270,7 +272,7 @@ namespace KSPSerialIO
         private float refreshrate = 0.08f;
         private ScreenMessageStyle KSPIOScreenStyle = ScreenMessageStyle.LOWER_CENTER;
         Vessel ActiveVessel;
-        
+
         void Awake()
         {
             ScreenMessages.PostScreenMessage("IO awake", 10f, KSPIOScreenStyle);
@@ -329,11 +331,51 @@ namespace KSPSerialIO
                     KSPSerialPort.VData.TrueAnomaly = (float)ActiveVessel.orbit.trueAnomaly;
                     KSPSerialPort.VData.period = (int)Math.Round(ActiveVessel.orbit.period);
 
-                    //ScreenMessages.PostScreenMessage(KSPSerialPort.LData.AP.ToString());
+
+                    double ASL = ActiveVessel.mainBody.GetAltitude(ActiveVessel.CoM);
+                    double AGL = (ASL - ActiveVessel.terrainAltitude);
+
+                    if (AGL < ASL)
+                        KSPSerialPort.VData.RAlt = (float)AGL;
+                    else
+                        KSPSerialPort.VData.RAlt = (float)ASL;
+
+                    KSPSerialPort.VData.Fuelp = GetResourcePercent(ActiveVessel, "LiquidFuel");
+
+                    KSPSerialPort.VData.Vsurf = (float)ActiveVessel.srfSpeed;
+                    KSPSerialPort.VData.Lat = (float)ActiveVessel.latitude;
+                    KSPSerialPort.VData.Lon = (float)ActiveVessel.longitude;
+
+                    //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.Fuelp.ToString());
+                    //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.RAlt.ToString());
                     //KSPSerialPort.Port.WriteLine("Success!");
                     KSPSerialPort.sendPacket(KSPSerialPort.VData);
                 }
             }
+        }
+
+        private float GetResourcePercent(Vessel V, string resourceName)
+        {
+            double Fuel = 0;
+            double FuelMax = 0;
+
+            foreach (Part p in ActiveVessel.parts)
+            {
+                foreach (PartResource pr in p.Resources)
+                {
+                    if (pr.resourceName.Equals(resourceName))
+                    {
+                        Fuel += pr.amount;
+                        FuelMax += pr.maxAmount;
+                        break;
+                    }
+                }
+            }
+
+            if (FuelMax == 0)
+                return 0.0f;
+            else
+                return (float)(Fuel / FuelMax * 100.0);
         }
 
         void FixedUpdate()
