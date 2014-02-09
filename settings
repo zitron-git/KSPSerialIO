@@ -1,0 +1,14 @@
+var config = KSP.IO.PluginConfiguration.CreateForType<YourClass>();
+[23:23:52] zitron FA: do you need to specify a file name?
+[23:23:57] nick.noether: then config.load() / config.save()
+[23:23:57] nick.noether: no
+[23:24:02] nick.noether: you do that via the classname
+[23:24:13] zitron FA: where is it saved then?
+[23:24:28] nick.noether: it looks up the assembly your class belongs to (i.e. your dll) then adds PluginData/ as a folder and creates a config file there
+[23:24:41] zitron FA: ah
+[23:24:58] zitron FA: it is editable or some binary file?
+[23:25:02] nick.noether: editable
+[23:25:13] zitron FA: perfect thanks alot!
+[23:25:33] nick.noether: simple xml file
+[23:25:53] nick.noether: you can just do config.SetValue(name,value) and done
+[23:26:02] zitron FA: very nice

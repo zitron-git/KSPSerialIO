@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 
 using OpenNETCF.IO.Ports;
 using UnityEngine;
+using KSP.IO;
 
 namespace KSPSerialIO
 {
@@ -45,6 +46,37 @@ namespace KSPSerialIO
     }
 
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
+    public class SettingsNStuff : MonoBehaviour
+    {
+        public static PluginConfiguration cfg = PluginConfiguration.CreateForType<SettingsNStuff>();
+        public static string DefaultPort;
+        public static double refreshrate;
+        public static int HandshakeDelay;
+        public static int BaudRate;
+
+        void Awake()
+        {
+            //cfg["refresh"] = 0.08;
+            //cfg["DefaultPort"] = "COM1";
+            //cfg["HandshakeDelay"] = 2500;
+            print("KSPSerialIO: Loading settings...");
+
+            cfg.load();
+            DefaultPort = cfg.GetValue<string>("DefaultPort");
+            print("KSPSerialIO: Default Port = " + DefaultPort);
+
+            refreshrate = cfg.GetValue<double>("refresh");
+            print("KSPSerialIO: Refreshrate = " + refreshrate.ToString());
+
+            BaudRate = cfg.GetValue<int>("BaudRate");
+            print("KSPSerialIO: BaudRate = " + BaudRate.ToString());
+
+            HandshakeDelay = cfg.GetValue<int>("HandshakeDelay");
+            print("KSPSerialIO: Handshake Delay = " + HandshakeDelay.ToString());
+        }
+    }
+
+    [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class KSPSerialPort : MonoBehaviour
     {
         public static SerialPort Port;
@@ -65,6 +97,8 @@ namespace KSPSerialIO
             byte[] Packet = new byte[size + 4];
 
             //Packet = [header][size][payload][checksum];
+            //Header = [Header1=0xBE][Header2=0xEF]
+            //size = [payload.length (0-255)]
 
             for (int i = 0; i < size; i++)
             {
@@ -106,6 +140,7 @@ namespace KSPSerialIO
 
         void Awake()
         {
+            print("KSPSerialIO: Version 0.12");
             print("KSPSerialIO: Getting serial ports...");
             initializeDataPackets();
 
@@ -120,17 +155,31 @@ namespace KSPSerialIO
                 }
                 else
                 {
-                    String[] names = SerialCOMSKey.GetValueNames();
+                    String[] realports = SerialCOMSKey.GetValueNames();  // get list of all serial devices
+                    String[] names = new string[realports.Length + 1];   // make a new list with 1 extra, we put the default port first
+                    realports.CopyTo(names, 1);
 
                     print("KSPSerialIO: Found " + names.Length.ToString() + " serial ports");
 
                     //look through all found ports for our display
+                    int j = 0;
+
                     foreach (string PortName in names)
                     {
-                        PortNumber = (string)SerialCOMSKey.GetValue(PortName);
-                        print("KSPSerialIO: trying port " + PortName + " - " + PortNumber);
+                        if (j == 0)  // try default port first
+                        {
+                            PortNumber = SettingsNStuff.DefaultPort;
+                            print("KSPSerialIO: trying default port " + PortNumber);
+                        }
+                        else
+                        {
+                            PortNumber = (string)SerialCOMSKey.GetValue(PortName);
+                            print("KSPSerialIO: trying port " + PortName + " - " + PortNumber);
+                        }
 
-                        Port = new SerialPort(PortNumber, 38400, Parity.None, 8, StopBits.One);
+                        j++;
+
+                        Port = new SerialPort(PortNumber, SettingsNStuff.BaudRate, Parity.None, 8, StopBits.One);
                         Port.ReceivedBytesThreshold = 3;
 
                         //print("KSPSerialIO: receive threshold " + Port.ReceivedBytesThreshold.ToString());
@@ -151,15 +200,15 @@ namespace KSPSerialIO
                             //secret handshake
                             if (Port.IsOpen)
                             {
-                                Thread.Sleep(2500);
+                                Thread.Sleep(SettingsNStuff.HandshakeDelay);
                                 sendPacket(HPacket);
 
                                 //wait for reply
-                                int j = 0;
-                                while (Port.BytesToRead == 0 && j < 5 && !DisplayFound)
+                                int k = 0;
+                                while (Port.BytesToRead == 0 && k < 5 && !DisplayFound)
                                 {
                                     Thread.Sleep(200);
-                                    j++;
+                                    k++;
                                 }
 
                                 Port.Close();
@@ -268,14 +317,16 @@ namespace KSPSerialIO
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class KSPSerialIO : MonoBehaviour
     {
-        private float lastUpdate = 0.0f;
-        private float refreshrate = 0.08f;
+        private double lastUpdate = 0.0f;
+        public double refreshrate = 1.0f;
+
         private ScreenMessageStyle KSPIOScreenStyle = ScreenMessageStyle.LOWER_CENTER;
         Vessel ActiveVessel;
 
         void Awake()
         {
             ScreenMessages.PostScreenMessage("IO awake", 10f, KSPIOScreenStyle);
+            refreshrate = SettingsNStuff.refreshrate;
         }
 
         void Start()
