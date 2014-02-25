@@ -45,6 +45,31 @@ namespace KSPSerialIO
         public byte M3;
     }
 
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct ControlPacket
+    {
+        public byte id;
+        public byte MainControls;                  //SAS RCS Lights Gear Brakes Precision Abort Stage 
+        public byte Mode;                          //0 = stage, 1 = docking, 3 = map
+        public ushort ControlGroup;                //control groups 1-10 in 2 bytes
+        public byte AdditionalControlByte1;        //other stuff
+        public byte AdditionalControlByte2;
+    };
+
+    public struct VesselControls
+    {
+        public Boolean SAS;
+        public Boolean RCS;
+        public Boolean Lights;
+        public Boolean Gear;
+        public Boolean Brakes;
+        public Boolean Precision;
+        public Boolean Abort;
+        public Boolean Stage;
+        public int Mode;
+        public Boolean[] ControlGroup;
+    };
+
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class SettingsNStuff : MonoBehaviour
     {
@@ -76,15 +101,26 @@ namespace KSPSerialIO
         }
     }
 
-    [KSPAddon(KSPAddon.Startup.MainMenu, false)]
+    [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class KSPSerialPort : MonoBehaviour
     {
         public static SerialPort Port;
         public static string PortNumber;
-        public static VesselData VData;
         public static Boolean DisplayFound = false;
+        public static Boolean ControlReceived = false;
+
+        public static VesselData VData;
+        public static ControlPacket CPacket;
         private static HandShakePacket HPacket;
-        private string COMRx;
+
+        public static VesselControls VControls = new VesselControls();
+        public static VesselControls VControlsOld = new VesselControls();
+
+        private static byte[] buffer = new byte[255];
+        private static byte rx_len;
+        private static byte rx_array_inx;
+        private static int structSize;
+        private static byte id = 255;
 
         public static void sendPacket(object anything)
         {
@@ -114,7 +150,14 @@ namespace KSPSerialIO
             Port.Write(Packet, 0, Packet.Length);
         }
 
-        //this thing is copied from the intarwebs, converts struct to byte array
+        private void Begin()
+        {
+            Port = new SerialPort(PortNumber, SettingsNStuff.BaudRate, Parity.None, 8, StopBits.One);
+            Port.ReceivedBytesThreshold = 3;
+            Port.ReceivedEvent += Port_ReceivedEvent;
+        }
+
+        //these are copied from the intarwebs, converts struct to byte array
         private static byte[] StructureToByteArray(object obj)
         {
             int len = Marshal.SizeOf(obj);
@@ -126,115 +169,152 @@ namespace KSPSerialIO
             return arr;
         }
 
+        private static object ByteArrayToStructure(byte[] bytearray, object obj)
+        {
+            int len = Marshal.SizeOf(obj);
+
+            IntPtr i = Marshal.AllocHGlobal(len);
+
+            Marshal.Copy(bytearray, 0, i, len);
+
+            obj = Marshal.PtrToStructure(i, obj.GetType());
+
+            Marshal.FreeHGlobal(i);
+
+            return obj;
+        }
+        /*
+        private static T ReadUsingMarshalUnsafe<T>(byte[] data) where T : struct
+        {
+            unsafe
+            {
+                fixed (byte* p = &data[0])
+                {
+                    return (T)Marshal.PtrToStructure(new IntPtr(p), typeof(T));
+                }
+            }
+        }
+        */
         void initializeDataPackets()
         {
             VData = new VesselData();
             VData.id = 1;
 
             HPacket = new HandShakePacket();
-            HPacket.id = 0x00;
-            HPacket.M1 = 0x4B;
-            HPacket.M2 = 0x53;
-            HPacket.M3 = 0x50;
+            HPacket.id = 0;
+            HPacket.M1 = 1;
+            HPacket.M2 = 2;
+            HPacket.M3 = 3;
+
+            CPacket = new ControlPacket();
+
+            VControls.ControlGroup = new Boolean[11];
+            VControlsOld.ControlGroup = new Boolean[11];
         }
 
         void Awake()
         {
-            print("KSPSerialIO: Version 0.12");
-            print("KSPSerialIO: Getting serial ports...");
-            initializeDataPackets();
-
-            try
+            if (DisplayFound)
             {
-                //Use registry hack to get a list of serial ports until we get system.io.ports
-                RegistryKey SerialCOMSKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DEVICEMAP\SERIALCOMM\");
+                Debug.Log("KSPSerialIO: running...");
+                Begin();
+            }
+            else
+            {
+                Debug.Log("KSPSerialIO: Version 0.13.2 ");
+                Debug.Log("KSPSerialIO: Getting serial ports...");
+                initializeDataPackets();
 
-                if (SerialCOMSKey == null)
+                try
                 {
-                    print("KSPSerialIO: Dude do you even win32 serial port??");
-                }
-                else
-                {
-                    String[] realports = SerialCOMSKey.GetValueNames();  // get list of all serial devices
-                    String[] names = new string[realports.Length + 1];   // make a new list with 1 extra, we put the default port first
-                    realports.CopyTo(names, 1);
+                    //Use registry hack to get a list of serial ports until we get system.io.ports
+                    RegistryKey SerialCOMSKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DEVICEMAP\SERIALCOMM\");
 
-                    print("KSPSerialIO: Found " + names.Length.ToString() + " serial ports");
+                    Begin();
 
-                    //look through all found ports for our display
-                    int j = 0;
+                    //print("KSPSerialIO: receive threshold " + Port.ReceivedBytesThreshold.ToString());
 
-                    foreach (string PortName in names)
+                    if (SerialCOMSKey == null)
                     {
-                        if (j == 0)  // try default port first
+                        Debug.Log("KSPSerialIO: Dude do you even win32 serial port??");
+                    }
+                    else
+                    {
+                        String[] realports = SerialCOMSKey.GetValueNames();  // get list of all serial devices
+                        String[] names = new string[realports.Length + 1];   // make a new list with 1 extra, we put the default port first
+                        realports.CopyTo(names, 1);
+
+                        Debug.Log("KSPSerialIO: Found " + names.Length.ToString() + " serial ports");
+
+                        //look through all found ports for our display
+                        int j = 0;
+
+                        foreach (string PortName in names)
                         {
-                            PortNumber = SettingsNStuff.DefaultPort;
-                            print("KSPSerialIO: trying default port " + PortNumber);
-                        }
-                        else
-                        {
-                            PortNumber = (string)SerialCOMSKey.GetValue(PortName);
-                            print("KSPSerialIO: trying port " + PortName + " - " + PortNumber);
-                        }
-
-                        j++;
-
-                        Port = new SerialPort(PortNumber, SettingsNStuff.BaudRate, Parity.None, 8, StopBits.One);
-                        Port.ReceivedBytesThreshold = 3;
-
-                        //print("KSPSerialIO: receive threshold " + Port.ReceivedBytesThreshold.ToString());
-
-                        Port.ReceivedEvent += Port_ReceivedEvent;
-
-                        if (!Port.IsOpen)
-                        {
-                            try
+                            if (j == 0)  // try default port first
                             {
-                                Port.Open();
+                                PortNumber = SettingsNStuff.DefaultPort;
+                                Debug.Log("KSPSerialIO: trying default port " + PortNumber);
                             }
-                            catch (Exception e)
+                            else
                             {
-                                print("Error opening serial port " + Port.PortName + ": " + e.Message);
+                                PortNumber = (string)SerialCOMSKey.GetValue(PortName);
+                                Debug.Log("KSPSerialIO: trying port " + PortName + " - " + PortNumber);
                             }
 
-                            //secret handshake
-                            if (Port.IsOpen)
+                            Port.PortName = PortNumber;
+
+                            j++;
+
+                            if (!Port.IsOpen)
                             {
-                                Thread.Sleep(SettingsNStuff.HandshakeDelay);
-                                sendPacket(HPacket);
-
-                                //wait for reply
-                                int k = 0;
-                                while (Port.BytesToRead == 0 && k < 5 && !DisplayFound)
+                                try
                                 {
-                                    Thread.Sleep(200);
-                                    k++;
+                                    Port.Open();
+                                }
+                                catch (Exception e)
+                                {
+                                    Debug.Log("Error opening serial port " + Port.PortName + ": " + e.Message);
                                 }
 
-                                Port.Close();
-                                if (DisplayFound)
+                                //secret handshake
+                                if (Port.IsOpen)
                                 {
-                                    print("KSPSerialIO: found KSP Display at " + Port.PortName);
-                                    break;
-                                }
-                                else
-                                {
-                                    print("KSPSerialIO: KSP Display not found");
+                                    Thread.Sleep(SettingsNStuff.HandshakeDelay);
+                                    sendPacket(HPacket);
+
+                                    //wait for reply
+                                    int k = 0;
+                                    while (Port.BytesToRead == 0 && k < 15 && !DisplayFound)
+                                    {
+                                        Thread.Sleep(100);
+                                        k++;
+                                    }
+
+                                    Port.Close();
+                                    if (DisplayFound)
+                                    {
+                                        Debug.Log("KSPSerialIO: found KSP Display at " + Port.PortName);
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        Debug.Log("KSPSerialIO: KSP Display not found");
+                                    }
                                 }
                             }
-                        }
-                        else
-                        {
-                            print("KSPSerialIO: " + PortNumber + "is already being used.");
+                            else
+                            {
+                                Debug.Log("KSPSerialIO: " + PortNumber + "is already being used.");
+                            }
                         }
                     }
-                }
 
-                //ports = SerialPort.GetPortNames();
-            }
-            catch (Exception e)
-            {
-                print(e.Message);
+                }
+                catch (Exception e)
+                {
+                    print(e.Message);
+                }
             }
         }
 
@@ -256,52 +336,143 @@ namespace KSPSerialIO
 
         private void Port_ReceivedEvent(object sender, SerialReceivedEventArgs e)
         {
-            //COMRx = "just fucking work already!!!";
             while (Port.BytesToRead > 0)
             {
-                try
+                if (processCOM())
                 {
-                    COMRx = readline();
-                    ProcessCOMRx();
-                }
-                catch
-                {
-                    ReadLineError();
-                }
-            }
-        }
-
-        private void ReadLineError()
-        {
-            print("Read Line Error");
-        }
-
-        private void ProcessCOMRx()
-        {
-            if (!string.IsNullOrEmpty(COMRx))
-            {
-                try
-                {
-                    string[] parsed = COMRx.Split(';');
-
-                    if (parsed.Length > 1)
+                    switch (id)
                     {
-                        if (parsed[0] == "KSP")
-                        {
-                            short messageID = (short)double.Parse(parsed[1]);
-                            if (messageID == 0)
-                            {
-                                DisplayFound = true;
-                            }
-                        }
+                        case 0:
+                            DisplayFound = true;
+                            Invoke("HandShake", 0);
+                            break;
+                        case 1:
+                            VesselControls();
+                            //Invoke("VesselControls", 0);
+                            break;
+                        default:
+                            Invoke("Unimplemented", 0);
+                            break;
                     }
-                    COMRx = "";
-                }
-                catch
-                {
-                    print("Parse Error: " + COMRx + '\n');
                 }
             }
+        }
+
+        private static bool processCOM()
+        {
+            byte calc_CS;
+
+            if (rx_len == 0)
+            {
+                while (Port.ReadByte() != 0xBE)
+                {
+                    if (Port.BytesToRead == 0)
+                        return false;
+                }
+
+                if (Port.ReadByte() == 0xEF)
+                {
+                    rx_len = (byte)Port.ReadByte();
+                    id = (byte)Port.ReadByte();
+                    rx_array_inx = 1;
+
+                    switch (id)
+                    {
+                        case 0:
+                            structSize = Marshal.SizeOf(HPacket);
+                            break;
+                        case 1:
+                            structSize = Marshal.SizeOf(CPacket);
+                            break;
+                    }
+
+                    //make sure the binary structs on both Arduino and plugin are the same size.
+                    if (rx_len != structSize || rx_len == 0)
+                    {
+                        rx_len = 0;
+                        return false;
+                    }
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                while (Port.BytesToRead > 0 && rx_array_inx <= rx_len)
+                {
+                    buffer[rx_array_inx++] = (byte)Port.ReadByte();
+                }
+                buffer[0] = id;
+
+                if (rx_len == (rx_array_inx - 1))
+                {
+                    //seem to have got whole message
+                    //last uint8_t is CS
+                    calc_CS = rx_len;
+                    for (int i = 0; i < rx_len; i++)
+                    {
+                        calc_CS ^= buffer[i];
+                    }
+
+                    if (calc_CS == buffer[rx_array_inx - 1])
+                    {//CS good
+                        rx_len = 0;
+                        rx_array_inx = 1;
+                        return true;
+                    }
+                    else
+                    {
+                        //failed checksum, need to clear this out anyway
+                        rx_len = 0;
+                        rx_array_inx = 1;
+                        return false;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private void HandShake()
+        {
+            HPacket = (HandShakePacket)ByteArrayToStructure(buffer, HPacket);
+
+            //HPacket = ReadUsingMarshalUnsafe<HandShakePacket>(buffer);            
+            Debug.Log("KSPSerialIO: Handshake received - " + HPacket.M1.ToString() + HPacket.M2.ToString() + HPacket.M3.ToString());
+        }
+
+        private void VesselControls()
+        {
+            CPacket = (ControlPacket)ByteArrayToStructure(buffer, CPacket);
+
+            VControls.SAS = BitMathByte(CPacket.MainControls, 7);
+            VControls.RCS = BitMathByte(CPacket.MainControls, 6);
+            VControls.Lights = BitMathByte(CPacket.MainControls, 5);
+            VControls.Gear = BitMathByte(CPacket.MainControls, 4);
+            VControls.Brakes = BitMathByte(CPacket.MainControls, 3);
+            VControls.Precision = BitMathByte(CPacket.MainControls, 2);
+            VControls.Abort = BitMathByte(CPacket.MainControls, 1);
+            VControls.Stage = BitMathByte(CPacket.MainControls, 0);
+
+            ControlReceived = true;
+            //Debug.Log("KSPSerialIO: ControlPacket received");
+        }
+
+        private Boolean BitMathByte(byte x, int n)
+        {
+            return ((x >> n) & 1) == 1;
+        }
+
+        private void Unimplemented()
+        {
+            Debug.Log("KSPSerialIO: Packet id unimplemented");
+        }
+
+        private static void debug()
+        {
+            Debug.Log(Port.BytesToRead.ToString() + "BTR");
         }
 
         void OnDestroy()
@@ -309,7 +480,8 @@ namespace KSPSerialIO
             if (KSPSerialPort.Port.IsOpen)
             {
                 KSPSerialPort.Port.Close();
-                print("KSPSerialIO: Port closed");
+                Port.ReceivedEvent -= Port_ReceivedEvent;
+                Debug.Log("KSPSerialIO: Port closed");
             }
         }
     }
@@ -319,9 +491,9 @@ namespace KSPSerialIO
     {
         private double lastUpdate = 0.0f;
         public double refreshrate = 1.0f;
+        public static Vessel ActiveVessel;
 
-        private ScreenMessageStyle KSPIOScreenStyle = ScreenMessageStyle.LOWER_CENTER;
-        Vessel ActiveVessel;
+        private ScreenMessageStyle KSPIOScreenStyle = ScreenMessageStyle.UPPER_RIGHT;
 
         void Awake()
         {
@@ -337,6 +509,7 @@ namespace KSPSerialIO
                 {
                     ScreenMessages.PostScreenMessage("Starting serial port " + KSPSerialPort.Port.PortName, 10f, KSPIOScreenStyle);
 
+
                     try
                     {
                         KSPSerialPort.Port.Open();
@@ -351,6 +524,12 @@ namespace KSPSerialIO
                 {
                     ScreenMessages.PostScreenMessage("Using serial port " + KSPSerialPort.Port.PortName, 10f, KSPIOScreenStyle);
                 }
+
+                Thread.Sleep(200);
+                ActiveVessel = FlightGlobals.ActiveVessel;
+                //sync inputs at start
+                ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.RCS, KSPSerialPort.VControls.RCS);
+                ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, KSPSerialPort.VControls.SAS);
             }
             else
             {
@@ -360,12 +539,14 @@ namespace KSPSerialIO
 
         void Update()
         {
-            if ((Time.time - lastUpdate) > refreshrate && KSPSerialPort.Port.IsOpen)
-            {
-                ActiveVessel = FlightGlobals.ActiveVessel;
+            ActiveVessel = FlightGlobals.ActiveVessel;
 
-                if (ActiveVessel != null)
+            if (ActiveVessel != null)
+            {
+
+                if ((Time.time - lastUpdate) > refreshrate && KSPSerialPort.Port.IsOpen)
                 {
+
                     lastUpdate = Time.time;
 
                     KSPSerialPort.VData.AP = (float)ActiveVessel.orbit.ApA;
@@ -401,8 +582,42 @@ namespace KSPSerialIO
                     //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.RAlt.ToString());
                     //KSPSerialPort.Port.WriteLine("Success!");
                     KSPSerialPort.sendPacket(KSPSerialPort.VData);
-                }
-            }
+
+
+                } //end refresh
+
+                if (KSPSerialPort.ControlReceived)
+                {/*
+                    ScreenMessages.PostScreenMessage("SAS: " + KSPSerialPort.VControls.SAS.ToString() +
+                    ", RCS: " + KSPSerialPort.VControls.RCS.ToString() +
+                    ", Lights: " + KSPSerialPort.VControls.Lights.ToString() +
+                    ", Gear: " + KSPSerialPort.VControls.Gear.ToString() +
+                    ", Brakes: " + KSPSerialPort.VControls.Brakes.ToString() +
+                    ", Precision: " + KSPSerialPort.VControls.Precision.ToString() +
+                    ", Abort: " + KSPSerialPort.VControls.Abort.ToString() +
+                    ", Stage: " + KSPSerialPort.VControls.Stage.ToString(), 10f, KSPIOScreenStyle);
+                    */
+
+                    //if (FlightInputHandler.RCSLock != KSPSerialPort.VControls.RCS)
+                    if (KSPSerialPort.VControls.RCS != KSPSerialPort.VControlsOld.RCS)
+                    {
+                        ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.RCS, KSPSerialPort.VControls.RCS);
+                        KSPSerialPort.VControlsOld.RCS = KSPSerialPort.VControls.RCS;
+                        //ScreenMessages.PostScreenMessage("RCS: " + KSPSerialPort.VControls.RCS.ToString(), 10f, KSPIOScreenStyle);
+                    }
+
+                    //if (ActiveVessel.ctrlState.killRot != KSPSerialPort.VControls.SAS)
+                    if (KSPSerialPort.VControls.SAS != KSPSerialPort.VControlsOld.SAS)
+                    {
+                        ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, KSPSerialPort.VControls.SAS);
+                        KSPSerialPort.VControlsOld.SAS = KSPSerialPort.VControls.SAS;
+                        //ScreenMessages.PostScreenMessage("SAS: " + KSPSerialPort.VControls.SAS.ToString(), 10f, KSPIOScreenStyle);
+                    }
+
+                    KSPSerialPort.ControlReceived = false;
+                } //end ControlReceived
+
+            }//end if null
         }
 
         private float GetResourcePercent(Vessel V, string resourceName)
@@ -431,6 +646,7 @@ namespace KSPSerialIO
 
         void FixedUpdate()
         {
+
         }
 
         void OnDestroy()
