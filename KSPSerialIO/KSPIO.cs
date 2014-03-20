@@ -12,6 +12,7 @@ using KSP.IO;
 
 namespace KSPSerialIO
 {
+    #region Structs
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct VesselData
     {
@@ -30,10 +31,24 @@ namespace KSPSerialIO
         public float Density;       //13
         public int period;          //14
         public float RAlt;          //15
-        public float Fuelp;         //16
+        public float Alt;           //16
         public float Vsurf;         //17
         public float Lat;           //18
         public float Lon;           //19
+        public float LiquidFuelTot; //20
+        public float LiquidFuel;    //21
+        public float OxidizerTot;   //22
+        public float Oxidizer;      //23
+        public float EChargeTot;    //24
+        public float ECharge;       //25
+        public float MonoPropTot;   //26
+        public float MonoProp;      //27
+        public float IntakeAirTot;  //28
+        public float IntakeAir;     //29
+        public float SolidFuelTot;  //30
+        public float SolidFuel;     //31
+        public float XenonGasTot;   //32
+        public float XenonGas;      //33
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -69,6 +84,14 @@ namespace KSPSerialIO
         public int Mode;
         public Boolean[] ControlGroup;
     };
+
+    struct IOResource
+    {
+        public float Max;
+        public float Current;
+    }
+
+    #endregion
 
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class SettingsNStuff : MonoBehaviour
@@ -221,8 +244,9 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.13.4 ");
+                Debug.Log("KSPSerialIO: Version 0.13.5 ");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
+                Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
 
                 try
@@ -502,6 +526,7 @@ namespace KSPSerialIO
         private double lastUpdate = 0.0f;
         public double refreshrate = 1.0f;
         public static Vessel ActiveVessel;
+        IOResource TempR = new IOResource();
 
         private ScreenMessageStyle KSPIOScreenStyle = ScreenMessageStyle.UPPER_RIGHT;
 
@@ -569,7 +594,7 @@ namespace KSPSerialIO
 
             if (ActiveVessel != null)
             {
-
+                #region outputs
                 if ((Time.time - lastUpdate) > refreshrate && KSPSerialPort.Port.IsOpen)
                 {
 
@@ -598,11 +623,32 @@ namespace KSPSerialIO
                     else
                         KSPSerialPort.VData.RAlt = (float)ASL;
 
-                    KSPSerialPort.VData.Fuelp = GetResourcePercent(ActiveVessel, "LiquidFuel");
-
+                    KSPSerialPort.VData.Alt = (float)ASL;
                     KSPSerialPort.VData.Vsurf = (float)ActiveVessel.srfSpeed;
                     KSPSerialPort.VData.Lat = (float)ActiveVessel.latitude;
                     KSPSerialPort.VData.Lon = (float)ActiveVessel.longitude;
+
+                    TempR = GetResourceTotal(ActiveVessel, "LiquidFuel");
+                    KSPSerialPort.VData.LiquidFuelTot = TempR.Max;
+                    KSPSerialPort.VData.LiquidFuel = TempR.Current;
+                    TempR = GetResourceTotal(ActiveVessel, "Oxidizer");
+                    KSPSerialPort.VData.OxidizerTot = TempR.Max;
+                    KSPSerialPort.VData.Oxidizer = TempR.Current;
+                    TempR = GetResourceTotal(ActiveVessel, "ElectricCharge");
+                    KSPSerialPort.VData.EChargeTot = TempR.Max;
+                    KSPSerialPort.VData.ECharge = TempR.Current;
+                    TempR = GetResourceTotal(ActiveVessel, "MonoPropellant");
+                    KSPSerialPort.VData.MonoPropTot = TempR.Max;
+                    KSPSerialPort.VData.MonoProp = TempR.Current;
+                    TempR = GetResourceTotal(ActiveVessel, "IntakeAir");
+                    KSPSerialPort.VData.IntakeAirTot = TempR.Max;
+                    KSPSerialPort.VData.IntakeAir = TempR.Current;
+                    TempR = GetResourceTotal(ActiveVessel, "SolidFuel");
+                    KSPSerialPort.VData.SolidFuelTot = TempR.Max;
+                    KSPSerialPort.VData.SolidFuel = TempR.Current;
+                    TempR = GetResourceTotal(ActiveVessel, "XenonGas");
+                    KSPSerialPort.VData.XenonGasTot = TempR.Max;
+                    KSPSerialPort.VData.XenonGas = TempR.Current;
 
                     //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.Fuelp.ToString());
                     //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.RAlt.ToString());
@@ -611,7 +657,8 @@ namespace KSPSerialIO
 
 
                 } //end refresh
-
+                #endregion
+                #region inputs
                 if (KSPSerialPort.ControlReceived)
                 {/*
                     ScreenMessages.PostScreenMessage("SAS: " + KSPSerialPort.VControls.SAS.ToString() +
@@ -737,14 +784,14 @@ namespace KSPSerialIO
 
                     KSPSerialPort.ControlReceived = false;
                 } //end ControlReceived
-
+                #endregion
             }//end if null
         }
 
-        private float GetResourcePercent(Vessel V, string resourceName)
+        #region utilities
+        private IOResource GetResourceTotal(Vessel V, string resourceName)
         {
-            double Fuel = 0;
-            double FuelMax = 0;
+            IOResource R = new IOResource();
 
             foreach (Part p in ActiveVessel.parts)
             {
@@ -752,18 +799,20 @@ namespace KSPSerialIO
                 {
                     if (pr.resourceName.Equals(resourceName))
                     {
-                        Fuel += pr.amount;
-                        FuelMax += pr.maxAmount;
+                        R.Current += (float)pr.amount;
+                        R.Max += (float)pr.maxAmount;
                         break;
                     }
                 }
             }
 
-            if (FuelMax == 0)
-                return 0.0f;
-            else
-                return (float)(Fuel / FuelMax * 100.0);
+            if (R.Max == 0)
+                R.Current = 0;
+
+            return R;
         }
+
+        #endregion
 
         void FixedUpdate()
         {
