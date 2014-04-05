@@ -65,10 +65,17 @@ namespace KSPSerialIO
     {
         public byte id;
         public byte MainControls;                  //SAS RCS Lights Gear Brakes Precision Abort Stage 
-        public byte Mode;                          //0 = stage, 1 = docking, 3 = map
+        public byte Mode;                          //0 = stage, 1 = docking, 2 = map
         public ushort ControlGroup;                //control groups 1-10 in 2 bytes
         public byte AdditionalControlByte1;        //other stuff
         public byte AdditionalControlByte2;
+        public short Pitch;                        //-1000 -> 1000
+        public short Roll;                         //-1000 -> 1000
+        public short Yaw;                          //-1000 -> 1000
+        public short TX;                           //-1000 -> 1000
+        public short TY;                           //-1000 -> 1000
+        public short TZ;                           //-1000 -> 1000
+        public short Throttle;                     //    0 -> 1000
     };
 
     public struct VesselControls
@@ -83,6 +90,13 @@ namespace KSPSerialIO
         public Boolean Stage;
         public int Mode;
         public Boolean[] ControlGroup;
+        public float Pitch;
+        public float Roll;
+        public float Yaw;
+        public float TX;
+        public float TY;
+        public float TZ;
+        public float Throttle;
     };
 
     struct IOResource
@@ -101,6 +115,14 @@ namespace KSPSerialIO
         public static double refreshrate;
         public static int HandshakeDelay;
         public static int BaudRate;
+        public static bool ThrottleEnable;
+        public static bool PitchEnable;
+        public static bool RollEnable;
+        public static bool YawEnable;
+        public static bool TXEnable;
+        public static bool TYEnable;
+        public static bool TZEnable;
+        public static double SASTol;
 
         void Awake()
         {
@@ -121,6 +143,30 @@ namespace KSPSerialIO
 
             HandshakeDelay = cfg.GetValue<int>("HandshakeDelay");
             print("KSPSerialIO: Handshake Delay = " + HandshakeDelay.ToString());
+
+            ThrottleEnable = cfg.GetValue<bool>("ThrottleEnable");
+            print("KSPSerialIO: Throttle Enable = " + ThrottleEnable.ToString());
+
+            PitchEnable = cfg.GetValue<bool>("PitchEnable");
+            print("KSPSerialIO: Pitch Enable = " + PitchEnable.ToString());
+
+            RollEnable = cfg.GetValue<bool>("RollEnable");
+            print("KSPSerialIO: Roll Enable = " + RollEnable.ToString());
+
+            YawEnable = cfg.GetValue<bool>("YawEnable");
+            print("KSPSerialIO: Yaw Enable = " + YawEnable.ToString());
+
+            TXEnable = cfg.GetValue<bool>("TXEnable");
+            print("KSPSerialIO: Translate X Enable = " + TXEnable.ToString());
+
+            TYEnable = cfg.GetValue<bool>("TYEnable");
+            print("KSPSerialIO: Translate Y Enable = " + TYEnable.ToString());
+
+            TZEnable = cfg.GetValue<bool>("TZEnable");
+            print("KSPSerialIO: Translate Z Enable = " + TZEnable.ToString());
+
+            SASTol = cfg.GetValue<double>("SASTol");
+            print("KSPSerialIO: SAS Tol = " + SASTol.ToString());
         }
     }
 
@@ -244,7 +290,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.13.5 ");
+                Debug.Log("KSPSerialIO: Version 0.14.2 ");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -479,6 +525,13 @@ namespace KSPSerialIO
             VControls.Precision = BitMathByte(CPacket.MainControls, 2);
             VControls.Abort = BitMathByte(CPacket.MainControls, 1);
             VControls.Stage = BitMathByte(CPacket.MainControls, 0);
+            VControls.Throttle = (float)CPacket.Throttle / 1000.0F;
+            VControls.Pitch = (float)CPacket.Pitch / 1000.0F;
+            VControls.Roll = (float)CPacket.Roll / 1000.0F;
+            VControls.Yaw = (float)CPacket.Yaw / 1000.0F;
+            VControls.TX = (float)CPacket.TX / 1000.0F;
+            VControls.TY = (float)CPacket.TY / 1000.0F;
+            VControls.TZ = (float)CPacket.TZ / 1000.0F;
 
             for (int j = 1; j <= 10; j++)
             {
@@ -544,7 +597,6 @@ namespace KSPSerialIO
                 {
                     ScreenMessages.PostScreenMessage("Starting serial port " + KSPSerialPort.Port.PortName, 10f, KSPIOScreenStyle);
 
-
                     try
                     {
                         KSPSerialPort.Port.Open();
@@ -581,6 +633,9 @@ namespace KSPSerialIO
                 ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Custom08, KSPSerialPort.VControls.ControlGroup[8]);
                 ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Custom09, KSPSerialPort.VControls.ControlGroup[9]);
                 ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Custom10, KSPSerialPort.VControls.ControlGroup[10]);
+
+                ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
+                ActiveVessel.OnFlyByWire += new FlightInputCallback(AxisInput);
             }
             else
             {
@@ -594,6 +649,7 @@ namespace KSPSerialIO
 
             if (ActiveVessel != null)
             {
+
                 #region outputs
                 if ((Time.time - lastUpdate) > refreshrate && KSPSerialPort.Port.IsOpen)
                 {
@@ -650,17 +706,18 @@ namespace KSPSerialIO
                     KSPSerialPort.VData.XenonGasTot = TempR.Max;
                     KSPSerialPort.VData.XenonGas = TempR.Current;
 
+                    //Debug.Log("KSPSerialIO: Throttle = " + KSPSerialPort.CPacket.Throttle.ToString());
                     //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.Fuelp.ToString());
                     //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.RAlt.ToString());
                     //KSPSerialPort.Port.WriteLine("Success!");
+
                     KSPSerialPort.sendPacket(KSPSerialPort.VData);
-
-
                 } //end refresh
                 #endregion
                 #region inputs
                 if (KSPSerialPort.ControlReceived)
                 {/*
+                  * 
                     ScreenMessages.PostScreenMessage("SAS: " + KSPSerialPort.VControls.SAS.ToString() +
                     ", RCS: " + KSPSerialPort.VControls.RCS.ToString() +
                     ", Lights: " + KSPSerialPort.VControls.Lights.ToString() +
@@ -670,6 +727,21 @@ namespace KSPSerialIO
                     ", Abort: " + KSPSerialPort.VControls.Abort.ToString() +
                     ", Stage: " + KSPSerialPort.VControls.Stage.ToString(), 10f, KSPIOScreenStyle);
                     */
+
+
+                    if (Math.Abs(KSPSerialPort.VControls.Pitch) > SettingsNStuff.SASTol ||
+                        Math.Abs(KSPSerialPort.VControls.Roll) > SettingsNStuff.SASTol ||
+                        Math.Abs(KSPSerialPort.VControls.Yaw) > SettingsNStuff.SASTol)
+                    {
+                        ActiveVessel.vesselSAS.ManualOverride(true);
+                        //KSPSerialPort.VControlsOld.Pitch = KSPSerialPort.VControls.Pitch;
+                        //KSPSerialPort.VControlsOld.Roll = KSPSerialPort.VControls.Roll;
+                        //KSPSerialPort.VControlsOld.Yaw = KSPSerialPort.VControls.Yaw;
+                    }
+                    else
+                    {
+                        ActiveVessel.vesselSAS.ManualOverride(false);
+                    }
 
                     //if (FlightInputHandler.RCSLock != KSPSerialPort.VControls.RCS)
                     if (KSPSerialPort.VControls.RCS != KSPSerialPort.VControlsOld.RCS)
@@ -780,12 +852,16 @@ namespace KSPSerialIO
                     {
                         ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Custom10, KSPSerialPort.VControls.ControlGroup[10]);
                         KSPSerialPort.VControlsOld.ControlGroup[10] = KSPSerialPort.VControls.ControlGroup[10];
-                    }
+                    } 
 
                     KSPSerialPort.ControlReceived = false;
                 } //end ControlReceived
                 #endregion
             }//end if null
+            else
+            {
+                ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
+            }
         }
 
         #region utilities
@@ -812,11 +888,35 @@ namespace KSPSerialIO
             return R;
         }
 
+        private void AxisInput(FlightCtrlState s)
+        {
+
+            if (SettingsNStuff.ThrottleEnable)
+                s.mainThrottle = KSPSerialPort.VControls.Throttle;
+
+            if (SettingsNStuff.PitchEnable)
+                s.pitch = KSPSerialPort.VControls.Pitch;
+
+            if (SettingsNStuff.RollEnable)
+                s.roll = KSPSerialPort.VControls.Roll;
+
+            if (SettingsNStuff.YawEnable) 
+                s.yaw = KSPSerialPort.VControls.Yaw;
+
+            if (SettingsNStuff.TXEnable)
+                s.X = KSPSerialPort.VControls.TX;
+
+            if (SettingsNStuff.TYEnable)
+                s.Y = KSPSerialPort.VControls.TY;
+
+            if (SettingsNStuff.TZEnable)
+                s.Z = KSPSerialPort.VControls.TZ;
+
+        }
         #endregion
 
         void FixedUpdate()
         {
-
         }
 
         void OnDestroy()
@@ -826,6 +926,8 @@ namespace KSPSerialIO
                 KSPSerialPort.Port.Close();
                 ScreenMessages.PostScreenMessage("Port closed", 10f, KSPIOScreenStyle);
             }
+
+            ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
         }
     }
 }
