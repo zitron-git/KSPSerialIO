@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Reflection;
 using System.Threading;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
@@ -49,6 +50,15 @@ namespace KSPSerialIO
         public float SolidFuel;     //31
         public float XenonGasTot;   //32
         public float XenonGas;      //33
+        public float LiquidFuelTotS;//34
+        public float LiquidFuelS;   //35
+        public float OxidizerTotS;  //36
+        public float OxidizerS;     //37
+        public UInt32 MissionTime;  //38
+        public float deltaTime;     //39
+        public float VOrbit;        //40
+        public UInt32 MNTime;       //41
+        public float MNDeltaV;      //42
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -99,7 +109,7 @@ namespace KSPSerialIO
         public float Throttle;
     };
 
-    struct IOResource
+    public struct IOResource
     {
         public float Max;
         public float Current;
@@ -290,7 +300,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.14.2 ");
+                Debug.Log("KSPSerialIO: Version 0.15.1");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -413,8 +423,8 @@ namespace KSPSerialIO
                     switch (id)
                     {
                         case 0:
-                            DisplayFound = true;
                             Invoke("HandShake", 0);
+                            DisplayFound = true;
                             break;
                         case 1:
                             VesselControls();
@@ -577,6 +587,10 @@ namespace KSPSerialIO
     public class KSPSerialIO : MonoBehaviour
     {
         private double lastUpdate = 0.0f;
+        private double deltaT = 1.0f;
+        private double missionTime = 0;
+        private double missionTimeOld = 0;
+
         public double refreshrate = 1.0f;
         public static Vessel ActiveVessel;
         IOResource TempR = new IOResource();
@@ -598,8 +612,9 @@ namespace KSPSerialIO
                     ScreenMessages.PostScreenMessage("Starting serial port " + KSPSerialPort.Port.PortName, 10f, KSPIOScreenStyle);
 
                     try
-                    {
+                    {                        
                         KSPSerialPort.Port.Open();
+                        Thread.Sleep(SettingsNStuff.HandshakeDelay);
                     }
                     catch (Exception e)
                     {
@@ -649,12 +664,16 @@ namespace KSPSerialIO
 
             if (ActiveVessel != null)
             {
+                //Debug.Log("KSPSerialIO: ActiveVessel found");
 
                 #region outputs
                 if ((Time.time - lastUpdate) > refreshrate && KSPSerialPort.Port.IsOpen)
                 {
-
                     lastUpdate = Time.time;
+
+                    List<Part> ActiveEngines = new List<Part>();                    
+                    ActiveEngines = GetListOfActivatedEngines(ActiveVessel);
+
 
                     KSPSerialPort.VData.AP = (float)ActiveVessel.orbit.ApA;
                     KSPSerialPort.VData.PE = (float)ActiveVessel.orbit.PeA;
@@ -687,9 +706,23 @@ namespace KSPSerialIO
                     TempR = GetResourceTotal(ActiveVessel, "LiquidFuel");
                     KSPSerialPort.VData.LiquidFuelTot = TempR.Max;
                     KSPSerialPort.VData.LiquidFuel = TempR.Current;
+
+                    KSPSerialPort.VData.LiquidFuelTotS = (float)ProspectForResourceMax("LiquidFuel", ActiveEngines);
+                    KSPSerialPort.VData.LiquidFuelS = (float)ProspectForResource("LiquidFuel", ActiveEngines);
+                    /*
+                    ScreenMessages.PostScreenMessage(KSPSerialPort.VData.LiquidFuelS.ToString() + "/" + KSPSerialPort.VData.LiquidFuelTotS +
+                        "   " + KSPSerialPort.VData.LiquidFuel.ToString() + "/" + KSPSerialPort.VData.LiquidFuelTot);
+                    */
                     TempR = GetResourceTotal(ActiveVessel, "Oxidizer");
                     KSPSerialPort.VData.OxidizerTot = TempR.Max;
                     KSPSerialPort.VData.Oxidizer = TempR.Current;
+
+                    KSPSerialPort.VData.OxidizerTotS = (float)ProspectForResourceMax("Oxidizer", ActiveEngines);
+                    KSPSerialPort.VData.OxidizerS = (float)ProspectForResource("Oxidizer", ActiveEngines);
+                    /*
+                    ScreenMessages.PostScreenMessage(KSPSerialPort.VData.OxidizerS.ToString() + "/" + KSPSerialPort.VData.OxidizerTotS +
+                        "   " + KSPSerialPort.VData.Oxidizer.ToString() + "/" + KSPSerialPort.VData.OxidizerTot);
+                    */
                     TempR = GetResourceTotal(ActiveVessel, "ElectricCharge");
                     KSPSerialPort.VData.EChargeTot = TempR.Max;
                     KSPSerialPort.VData.ECharge = TempR.Current;
@@ -706,6 +739,29 @@ namespace KSPSerialIO
                     KSPSerialPort.VData.XenonGasTot = TempR.Max;
                     KSPSerialPort.VData.XenonGas = TempR.Current;
 
+                    missionTime = ActiveVessel.missionTime;
+                    deltaT = missionTime - missionTimeOld;
+                    missionTimeOld = missionTime;
+
+                    KSPSerialPort.VData.MissionTime = (UInt32)Math.Round(missionTime);
+                    KSPSerialPort.VData.deltaTime = (float)deltaT;
+
+                    KSPSerialPort.VData.VOrbit = (float)ActiveVessel.orbit.GetVel().magnitude;
+
+                    if (FlightGlobals.ActiveVessel.patchedConicSolver.maneuverNodes.Count > 0)
+                    {
+                        KSPSerialPort.VData.MNTime = (UInt32)Math.Round(ActiveVessel.patchedConicSolver.maneuverNodes[0].UT - Planetarium.GetUniversalTime());
+                        KSPSerialPort.VData.MNDeltaV = (float)FlightGlobals.ActiveVessel.patchedConicSolver.maneuverNodes[0].DeltaV.magnitude;
+                    }
+                    else
+                    {
+                        KSPSerialPort.VData.MNTime = 0;
+                        KSPSerialPort.VData.MNDeltaV = 0;
+                    }
+
+                    //Debug.Log("KSPSerialIO: VOrbit" + KSPSerialPort.VData.VOrbit.ToString());
+                    //Debug.Log("KSPSerialIO: MNTime" + KSPSerialPort.VData.MNTime.ToString() + " MNDeltaV" + KSPSerialPort.VData.MNDeltaV.ToString());
+                    //Debug.Log("KSPSerialIO: Time" + KSPSerialPort.VData.MissionTime.ToString() + " Delta Time" + KSPSerialPort.VData.deltaTime.ToString());
                     //Debug.Log("KSPSerialIO: Throttle = " + KSPSerialPort.CPacket.Throttle.ToString());
                     //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.Fuelp.ToString());
                     //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.RAlt.ToString());
@@ -716,18 +772,26 @@ namespace KSPSerialIO
                 #endregion
                 #region inputs
                 if (KSPSerialPort.ControlReceived)
-                {/*
-                  * 
-                    ScreenMessages.PostScreenMessage("SAS: " + KSPSerialPort.VControls.SAS.ToString() +
-                    ", RCS: " + KSPSerialPort.VControls.RCS.ToString() +
-                    ", Lights: " + KSPSerialPort.VControls.Lights.ToString() +
-                    ", Gear: " + KSPSerialPort.VControls.Gear.ToString() +
-                    ", Brakes: " + KSPSerialPort.VControls.Brakes.ToString() +
-                    ", Precision: " + KSPSerialPort.VControls.Precision.ToString() +
-                    ", Abort: " + KSPSerialPort.VControls.Abort.ToString() +
-                    ", Stage: " + KSPSerialPort.VControls.Stage.ToString(), 10f, KSPIOScreenStyle);
-                    */
-
+                {
+                    /*
+                     ScreenMessages.PostScreenMessage("SAS: " + KSPSerialPort.VControls.SAS.ToString() +
+                     ", RCS: " + KSPSerialPort.VControls.RCS.ToString() +
+                     ", Lights: " + KSPSerialPort.VControls.Lights.ToString() +
+                     ", Gear: " + KSPSerialPort.VControls.Gear.ToString() +
+                     ", Brakes: " + KSPSerialPort.VControls.Brakes.ToString() +
+                     ", Precision: " + KSPSerialPort.VControls.Precision.ToString() +
+                     ", Abort: " + KSPSerialPort.VControls.Abort.ToString() +
+                     ", Stage: " + KSPSerialPort.VControls.Stage.ToString(), 10f, KSPIOScreenStyle);
+                    
+                     Debug.Log("KSPSerialIO: SAS: " + KSPSerialPort.VControls.SAS.ToString() +
+                     ", RCS: " + KSPSerialPort.VControls.RCS.ToString() +
+                     ", Lights: " + KSPSerialPort.VControls.Lights.ToString() +
+                     ", Gear: " + KSPSerialPort.VControls.Gear.ToString() +
+                     ", Brakes: " + KSPSerialPort.VControls.Brakes.ToString() +
+                     ", Precision: " + KSPSerialPort.VControls.Precision.ToString() +
+                     ", Abort: " + KSPSerialPort.VControls.Abort.ToString() +
+                     ", Stage: " + KSPSerialPort.VControls.Stage.ToString());
+                     */
 
                     if (Math.Abs(KSPSerialPort.VControls.Pitch) > SettingsNStuff.SASTol ||
                         Math.Abs(KSPSerialPort.VControls.Roll) > SettingsNStuff.SASTol ||
@@ -860,6 +924,7 @@ namespace KSPSerialIO
             }//end if null
             else
             {
+                Debug.Log("KSPSerialIO: ActiveVessel not found");
                 ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
             }
         }
@@ -877,6 +942,19 @@ namespace KSPSerialIO
                     {
                         R.Current += (float)pr.amount;
                         R.Max += (float)pr.maxAmount;
+
+                        /* shit doesn't work
+                        int stageno = p.inverseStage;
+                        
+                        Debug.Log(pr.resourceName + "  " + stageno.ToString() + "  " + Staging.CurrentStage.ToString());
+
+                        //if (p.inverseStage == Staging.CurrentStage + 1)
+                        if (stageno == Staging.CurrentStage)
+                        {                            
+                            R.CurrentStage += (float)pr.amount;
+                            R.MaxStage += (float)pr.maxAmount;
+                        }
+                         */
                         break;
                     }
                 }
@@ -913,6 +991,154 @@ namespace KSPSerialIO
                 s.Z = KSPSerialPort.VControls.TZ;
 
         }
+
+        // this recursive stage look up stuff stolen and modified from KOS and others
+        public static List<Part> GetListOfActivatedEngines(Vessel vessel)
+        {
+            var retList = new List<Part>();
+
+            foreach (var part in vessel.Parts)
+            {
+                foreach (PartModule module in part.Modules)
+                {
+                    var engineModule = module as ModuleEngines;
+                    if (engineModule != null)
+                    {
+                        if (engineModule.getIgnitionState)
+                        {
+                            retList.Add(part);
+                        }
+                    }
+
+                    var engineModuleFx = module as ModuleEnginesFX;
+                    if (engineModuleFx != null)
+                    {
+                        var engineMod = engineModuleFx;
+                        if (engineModuleFx.getIgnitionState)
+                        {
+                            retList.Add(part);
+                        }
+                    }
+                }
+            }
+
+            return retList;
+        }
+
+        public static double ProspectForResource(String resourceName, List<Part> engines)
+        {
+            List<Part> visited = new List<Part>();
+            double total = 0;
+
+            foreach (var part in engines)
+            {
+                total += ProspectForResource(resourceName, part, ref visited);
+            }
+
+            return total;
+        }
+
+        public static double ProspectForResource(String resourceName, Part engine)
+        {
+            List<Part> visited = new List<Part>();
+
+            return ProspectForResource(resourceName, engine, ref visited);
+        }
+
+        public static double ProspectForResource(String resourceName, Part part, ref List<Part> visited)
+        {
+            double ret = 0;
+
+            if (visited.Contains(part))
+            {
+                return 0;
+            }
+
+            visited.Add(part);
+
+            foreach (PartResource resource in part.Resources)
+            {
+                if (resource.resourceName.ToLower() == resourceName.ToLower())
+                {
+                    ret += resource.amount;
+                }
+            }
+
+            foreach (AttachNode attachNode in part.attachNodes)
+            {
+                if (attachNode.attachedPart != null //if there is a part attached here
+                        && attachNode.nodeType == AttachNode.NodeType.Stack //and the attached part is stacked (rather than surface mounted)
+                        && (attachNode.attachedPart.fuelCrossFeed //and the attached part allows fuel flow
+                            )
+                        && !(part.NoCrossFeedNodeKey.Length > 0 //and this part does not forbid fuel flow
+                                && attachNode.id.Contains(part.NoCrossFeedNodeKey))) // through this particular node
+                {
+
+
+                    ret += ProspectForResource(resourceName, attachNode.attachedPart, ref visited);
+                }
+            }
+
+            return ret;
+        }
+
+        public static double ProspectForResourceMax(String resourceName, List<Part> engines)
+        {
+            List<Part> visited = new List<Part>();
+            double total = 0;
+
+            foreach (var part in engines)
+            {
+                total += ProspectForResourceMax(resourceName, part, ref visited);
+            }
+
+            return total;
+        }
+
+        public static double ProspectForResourceMax(String resourceName, Part engine)
+        {
+            List<Part> visited = new List<Part>();
+
+            return ProspectForResourceMax(resourceName, engine, ref visited);
+        }
+
+        public static double ProspectForResourceMax(String resourceName, Part part, ref List<Part> visited)
+        {
+            double ret = 0;
+
+            if (visited.Contains(part))
+            {
+                return 0;
+            }
+
+            visited.Add(part);
+
+            foreach (PartResource resource in part.Resources)
+            {
+                if (resource.resourceName.ToLower() == resourceName.ToLower())
+                {
+                    ret += resource.maxAmount;
+                }
+            }
+
+            foreach (AttachNode attachNode in part.attachNodes)
+            {
+                if (attachNode.attachedPart != null //if there is a part attached here
+                        && attachNode.nodeType == AttachNode.NodeType.Stack //and the attached part is stacked (rather than surface mounted)
+                        && (attachNode.attachedPart.fuelCrossFeed //and the attached part allows fuel flow
+                            )
+                        && !(part.NoCrossFeedNodeKey.Length > 0 //and this part does not forbid fuel flow
+                                && attachNode.id.Contains(part.NoCrossFeedNodeKey))) // through this particular node
+                {
+
+
+                    ret += ProspectForResourceMax(resourceName, attachNode.attachedPart, ref visited);
+                }
+            }
+
+            return ret;
+        }
+
         #endregion
 
         void FixedUpdate()
