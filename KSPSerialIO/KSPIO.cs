@@ -201,6 +201,9 @@ namespace KSPSerialIO
         private static int structSize;
         private static byte id = 255;
 
+        private const byte HSPid = 0, VDid = 1, Cid = 101; //hard coded values for packet IDS
+
+
         public static void sendPacket(object anything)
         {
             byte[] Payload = StructureToByteArray(anything);
@@ -277,10 +280,10 @@ namespace KSPSerialIO
         void initializeDataPackets()
         {
             VData = new VesselData();
-            VData.id = 1;
+            VData.id = VDid;
 
             HPacket = new HandShakePacket();
-            HPacket.id = 0;
+            HPacket.id = HSPid;
             HPacket.M1 = 1;
             HPacket.M2 = 2;
             HPacket.M3 = 3;
@@ -300,7 +303,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.15.1");
+                Debug.Log("KSPSerialIO: Version 0.15.2");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -422,11 +425,21 @@ namespace KSPSerialIO
                 {
                     switch (id)
                     {
-                        case 0:
+                        case HSPid:
+                            HPacket = (HandShakePacket)ByteArrayToStructure(buffer, HPacket);
                             Invoke("HandShake", 0);
-                            DisplayFound = true;
+
+                            if ((HPacket.M1 == 3) && (HPacket.M2 == 1) && (HPacket.M3 == 4))
+                            {                                
+                                DisplayFound = true;
+                                
+                            }
+                            else
+                            {
+                                DisplayFound = false;
+                            }
                             break;
-                        case 1:
+                        case Cid:
                             VesselControls();
                             //Invoke("VesselControls", 0);
                             break;
@@ -458,10 +471,10 @@ namespace KSPSerialIO
 
                     switch (id)
                     {
-                        case 0:
+                        case HSPid:
                             structSize = Marshal.SizeOf(HPacket);
                             break;
-                        case 1:
+                        case Cid:
                             structSize = Marshal.SizeOf(CPacket);
                             break;
                     }
@@ -517,9 +530,6 @@ namespace KSPSerialIO
 
         private void HandShake()
         {
-            HPacket = (HandShakePacket)ByteArrayToStructure(buffer, HPacket);
-
-            //HPacket = ReadUsingMarshalUnsafe<HandShakePacket>(buffer);            
             Debug.Log("KSPSerialIO: Handshake received - " + HPacket.M1.ToString() + HPacket.M2.ToString() + HPacket.M3.ToString());
         }
 
@@ -612,7 +622,7 @@ namespace KSPSerialIO
                     ScreenMessages.PostScreenMessage("Starting serial port " + KSPSerialPort.Port.PortName, 10f, KSPIOScreenStyle);
 
                     try
-                    {                        
+                    {
                         KSPSerialPort.Port.Open();
                         Thread.Sleep(SettingsNStuff.HandshakeDelay);
                     }
@@ -671,7 +681,7 @@ namespace KSPSerialIO
                 {
                     lastUpdate = Time.time;
 
-                    List<Part> ActiveEngines = new List<Part>();                    
+                    List<Part> ActiveEngines = new List<Part>();
                     ActiveEngines = GetListOfActivatedEngines(ActiveVessel);
 
 
@@ -916,7 +926,7 @@ namespace KSPSerialIO
                     {
                         ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Custom10, KSPSerialPort.VControls.ControlGroup[10]);
                         KSPSerialPort.VControlsOld.ControlGroup[10] = KSPSerialPort.VControls.ControlGroup[10];
-                    } 
+                    }
 
                     KSPSerialPort.ControlReceived = false;
                 } //end ControlReceived
@@ -978,7 +988,7 @@ namespace KSPSerialIO
             if (SettingsNStuff.RollEnable)
                 s.roll = KSPSerialPort.VControls.Roll;
 
-            if (SettingsNStuff.YawEnable) 
+            if (SettingsNStuff.YawEnable)
                 s.yaw = KSPSerialPort.VControls.Yaw;
 
             if (SettingsNStuff.TXEnable)
