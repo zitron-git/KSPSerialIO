@@ -59,6 +59,9 @@ namespace KSPSerialIO
         public float VOrbit;        //40
         public UInt32 MNTime;       //41
         public float MNDeltaV;      //42
+        public float Pitch;         //43
+        public float Roll;          //44
+        public float Heading;       //45
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -303,7 +306,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.15.2");
+                Debug.Log("KSPSerialIO: Version 0.15.3");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -767,8 +770,21 @@ namespace KSPSerialIO
                     {
                         KSPSerialPort.VData.MNTime = 0;
                         KSPSerialPort.VData.MNDeltaV = 0;
-                    }
+                    }                    
 
+                    Quaternion attitude = updateHeadingPitchRollField(ActiveVessel);
+
+                    //KSPSerialPort.VData.Roll = Mathf.Atan2(2 * (x * y + w * z), w * w + x * x - y * y - z * z) * 180 / Mathf.PI;
+                    //KSPSerialPort.VData.Pitch = Mathf.Atan2(2 * (y * z + w * x), w * w - x * x - y * y + z * z) * 180 / Mathf.PI;
+                    //KSPSerialPort.VData.Heading = Mathf.Asin(-2 * (x * z - w * y)) *180 / Mathf.PI;
+
+                    KSPSerialPort.VData.Roll = (float)((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z);
+                    KSPSerialPort.VData.Pitch = (float)((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x);
+                    KSPSerialPort.VData.Heading = (float)attitude.eulerAngles.y;
+
+                    //Debug.Log("KSPSerialIO: Roll    " + KSPSerialPort.VData.Roll.ToString());
+                    //Debug.Log("KSPSerialIO: Pitch   " + KSPSerialPort.VData.Pitch.ToString());
+                    //Debug.Log("KSPSerialIO: Heading " + KSPSerialPort.VData.Heading.ToString());
                     //Debug.Log("KSPSerialIO: VOrbit" + KSPSerialPort.VData.VOrbit.ToString());
                     //Debug.Log("KSPSerialIO: MNTime" + KSPSerialPort.VData.MNTime.ToString() + " MNDeltaV" + KSPSerialPort.VData.MNDeltaV.ToString());
                     //Debug.Log("KSPSerialIO: Time" + KSPSerialPort.VData.MissionTime.ToString() + " Delta Time" + KSPSerialPort.VData.deltaTime.ToString());
@@ -1147,6 +1163,18 @@ namespace KSPSerialIO
             }
 
             return ret;
+        }
+
+        //Borrowed from MechJeb2
+        private Quaternion updateHeadingPitchRollField(Vessel v)
+        {
+            Vector3d CoM, north, up;
+            Quaternion rotationSurface;
+            CoM = v.findWorldCenterOfMass();
+            up = (CoM - v.mainBody.position).normalized;
+            north = Vector3d.Exclude(up, (v.mainBody.position + v.mainBody.transform.up * (float)v.mainBody.Radius) - CoM).normalized;
+            rotationSurface = Quaternion.LookRotation(north, up);
+            return Quaternion.Inverse(Quaternion.Euler(90, 0, 0) * Quaternion.Inverse(v.GetTransform().rotation) * rotationSurface);
         }
 
         #endregion
