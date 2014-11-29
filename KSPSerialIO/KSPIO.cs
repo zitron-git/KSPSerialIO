@@ -306,7 +306,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.15.3");
+                Debug.Log("KSPSerialIO: Version 0.15.4");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -606,6 +606,8 @@ namespace KSPSerialIO
 
         public double refreshrate = 1.0f;
         public static Vessel ActiveVessel;
+        public Guid VesselIDOld;
+
         IOResource TempR = new IOResource();
 
         private ScreenMessageStyle KSPIOScreenStyle = ScreenMessageStyle.UPPER_RIGHT;
@@ -673,11 +675,21 @@ namespace KSPSerialIO
 
         void Update()
         {
-            ActiveVessel = FlightGlobals.ActiveVessel;
-
-            if (ActiveVessel != null)
+            if (FlightGlobals.ActiveVessel != null)
             {
-                //Debug.Log("KSPSerialIO: ActiveVessel found");
+                //If the current active vessel is not what we were using, we need to remove controls from the old 
+                //vessel and attache it to the current one
+                if (ActiveVessel.id != FlightGlobals.ActiveVessel.id) 
+                {
+                    ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
+                    ActiveVessel = FlightGlobals.ActiveVessel;
+                    ActiveVessel.OnFlyByWire += new FlightInputCallback(AxisInput);
+                    Debug.Log("KSPSerialIO: ActiveVessel changed");
+                }
+                else
+                {
+                    ActiveVessel = FlightGlobals.ActiveVessel;
+                }
 
                 #region outputs
                 if ((Time.time - lastUpdate) > refreshrate && KSPSerialPort.Port.IsOpen)
@@ -947,12 +959,16 @@ namespace KSPSerialIO
                     KSPSerialPort.ControlReceived = false;
                 } //end ControlReceived
                 #endregion
-            }//end if null
+
+                
+            }//end if null and same vessel
             else
             {
                 Debug.Log("KSPSerialIO: ActiveVessel not found");
-                ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
+                //ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
             }
+            
+            
         }
 
         #region utilities
