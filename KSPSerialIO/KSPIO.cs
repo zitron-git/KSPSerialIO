@@ -306,7 +306,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.15.4");
+                Debug.Log("KSPSerialIO: Version 0.15.5");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -603,6 +603,7 @@ namespace KSPSerialIO
         private double deltaT = 1.0f;
         private double missionTime = 0;
         private double missionTimeOld = 0;
+        private double theTime = 0;
 
         public double refreshrate = 1.0f;
         public static Vessel ActiveVessel;
@@ -675,7 +676,7 @@ namespace KSPSerialIO
 
         void Update()
         {
-            if (FlightGlobals.ActiveVessel != null)
+            if (FlightGlobals.ActiveVessel != null && KSPSerialPort.Port.IsOpen)
             {
                 //If the current active vessel is not what we were using, we need to remove controls from the old 
                 //vessel and attache it to the current one
@@ -692,9 +693,10 @@ namespace KSPSerialIO
                 }
 
                 #region outputs
-                if ((Time.time - lastUpdate) > refreshrate && KSPSerialPort.Port.IsOpen)
+                theTime = Time.unscaledTime;
+                if ((theTime - lastUpdate) > refreshrate)
                 {
-                    lastUpdate = Time.time;
+                    lastUpdate = theTime;
 
                     List<Part> ActiveEngines = new List<Part>();
                     ActiveEngines = GetListOfActivatedEngines(ActiveVessel);
