@@ -306,7 +306,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.15.5");
+                Debug.Log("KSPSerialIO: Version 0.16.0");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -701,7 +701,6 @@ namespace KSPSerialIO
                     List<Part> ActiveEngines = new List<Part>();
                     ActiveEngines = GetListOfActivatedEngines(ActiveVessel);
 
-
                     KSPSerialPort.VData.AP = (float)ActiveVessel.orbit.ApA;
                     KSPSerialPort.VData.PE = (float)ActiveVessel.orbit.PeA;
                     KSPSerialPort.VData.SemiMajorAxis = (float)ActiveVessel.orbit.semiMajorAxis;
@@ -837,14 +836,14 @@ namespace KSPSerialIO
                         Math.Abs(KSPSerialPort.VControls.Roll) > SettingsNStuff.SASTol ||
                         Math.Abs(KSPSerialPort.VControls.Yaw) > SettingsNStuff.SASTol)
                     {
-                        ActiveVessel.vesselSAS.ManualOverride(true);
+                        ActiveVessel.Autopilot.SAS.ManualOverride(true);
                         //KSPSerialPort.VControlsOld.Pitch = KSPSerialPort.VControls.Pitch;
                         //KSPSerialPort.VControlsOld.Roll = KSPSerialPort.VControls.Roll;
                         //KSPSerialPort.VControlsOld.Yaw = KSPSerialPort.VControls.Yaw;
                     }
                     else
                     {
-                        ActiveVessel.vesselSAS.ManualOverride(false);
+                        ActiveVessel.Autopilot.SAS.ManualOverride(false);
                     }
 
                     //if (FlightInputHandler.RCSLock != KSPSerialPort.VControls.RCS)
