@@ -123,25 +123,24 @@ namespace KSPSerialIO
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class SettingsNStuff : MonoBehaviour
     {
-		public enum ControlType {
-			InternalTotal = 0, // Always use value provided by KSP.
-			ExternalTotal = 1, // Always use value from serial packet, overriding internal value.
-			InternalPriority = 2, // Only use external value if internal is 0.
-			ExternalPriority = 3, // Only use internal value if external is 0.
-		}
 
         public static PluginConfiguration cfg = PluginConfiguration.CreateForType<SettingsNStuff>();
         public static string DefaultPort;
         public static double refreshrate;
         public static int HandshakeDelay;
         public static int BaudRate;
-		public static ControlType ThrottleEnable;
-		public static ControlType PitchEnable;
-		public static ControlType RollEnable;
-		public static ControlType YawEnable;
-		public static ControlType TXEnable;
-		public static ControlType TYEnable;
-		public static ControlType TZEnable;
+		// Throttle and axis controls have the following settings:
+		// 0: The internal value (supplied by KSP) is always used.
+		// 1: The external value (read from serial packet) is always used.
+		// 2: If the internal value is not zero use it, otherwise use the external value.
+		// 3: If the external value is not zero use it, otherwise use the internal value.
+		public static int ThrottleEnable;
+		public static int PitchEnable;
+		public static int RollEnable;
+		public static int YawEnable;
+		public static int TXEnable;
+		public static int TYEnable;
+		public static int TZEnable;
         public static double SASTol;
 
         void Awake()
@@ -164,25 +163,25 @@ namespace KSPSerialIO
             HandshakeDelay = cfg.GetValue<int>("HandshakeDelay");
             print("KSPSerialIO: Handshake Delay = " + HandshakeDelay.ToString());
 
-			ThrottleEnable = cfg.GetValue<SettingsNStuff.ControlType>("ThrottleEnable");
+			ThrottleEnable = cfg.GetValue<int>("ThrottleEnable");
             print("KSPSerialIO: Throttle Enable = " + ThrottleEnable.ToString());
 
-			PitchEnable = cfg.GetValue<SettingsNStuff.ControlType>("PitchEnable");
+			PitchEnable = cfg.GetValue<int>("PitchEnable");
             print("KSPSerialIO: Pitch Enable = " + PitchEnable.ToString());
 
-			RollEnable = cfg.GetValue<SettingsNStuff.ControlType>("RollEnable");
+			RollEnable = cfg.GetValue<int>("RollEnable");
             print("KSPSerialIO: Roll Enable = " + RollEnable.ToString());
 
-			YawEnable = cfg.GetValue<SettingsNStuff.ControlType>("YawEnable");
+			YawEnable = cfg.GetValue<int>("YawEnable");
             print("KSPSerialIO: Yaw Enable = " + YawEnable.ToString());
 
-			TXEnable = cfg.GetValue<SettingsNStuff.ControlType>("TXEnable");
+			TXEnable = cfg.GetValue<int>("TXEnable");
             print("KSPSerialIO: Translate X Enable = " + TXEnable.ToString());
 
-			TYEnable = cfg.GetValue<SettingsNStuff.ControlType>("TYEnable");
+			TYEnable = cfg.GetValue<int>("TYEnable");
             print("KSPSerialIO: Translate Y Enable = " + TYEnable.ToString());
 
-			TZEnable = cfg.GetValue<SettingsNStuff.ControlType>("TZEnable");
+			TZEnable = cfg.GetValue<int>("TZEnable");
             print("KSPSerialIO: Translate Z Enable = " + TZEnable.ToString());
 
             SASTol = cfg.GetValue<double>("SASTol");
@@ -1020,16 +1019,16 @@ namespace KSPSerialIO
         {
 			switch (SettingsNStuff.ThrottleEnable)
 			{
-			case SettingsNStuff.ControlType.ExternalTotal:
+			case 1:
 				s.mainThrottle = KSPSerialPort.VControls.Throttle;
 				break;
-			case SettingsNStuff.ControlType.InternalPriority:
+			case 2:
 				if (s.mainThrottle == 0)
 				{
 					s.mainThrottle = KSPSerialPort.VControls.Throttle;
 				}
 				break;
-			case SettingsNStuff.ControlType.ExternalPriority:
+			case 3:
 				if (KSPSerialPort.VControls.Throttle != 0)
 				{
 					s.mainThrottle = KSPSerialPort.VControls.Throttle;
@@ -1041,14 +1040,14 @@ namespace KSPSerialIO
 
 			switch (SettingsNStuff.PitchEnable)
 			{
-			case SettingsNStuff.ControlType.ExternalTotal:
+			case 1:
 				s.pitch = KSPSerialPort.VControls.Pitch;
 				break;
-			case SettingsNStuff.ControlType.InternalPriority:
+			case 2:
 				if (s.pitch == 0)
 					s.pitch = KSPSerialPort.VControls.Pitch;
 				break;
-			case SettingsNStuff.ControlType.ExternalPriority:
+			case 3:
 				if (KSPSerialPort.VControls.Pitch != 0)
 					s.pitch = KSPSerialPort.VControls.Pitch;
 				break;
@@ -1058,14 +1057,14 @@ namespace KSPSerialIO
 
 			switch (SettingsNStuff.RollEnable)
 			{
-			case SettingsNStuff.ControlType.ExternalTotal:
+			case 1:
 				s.roll = KSPSerialPort.VControls.Roll;
 				break;
-			case SettingsNStuff.ControlType.InternalPriority:
+			case 2:
 				if (s.roll == 0)
 					s.roll = KSPSerialPort.VControls.Roll;
 				break;
-			case SettingsNStuff.ControlType.ExternalPriority:
+			case 3:
 				if (KSPSerialPort.VControls.Roll != 0)
 					s.roll = KSPSerialPort.VControls.Roll;
 				break;
@@ -1075,14 +1074,14 @@ namespace KSPSerialIO
 
 			switch (SettingsNStuff.YawEnable)
 			{
-			case SettingsNStuff.ControlType.ExternalTotal:
+			case 1:
 				s.yaw = KSPSerialPort.VControls.Yaw;
 				break;
-			case SettingsNStuff.ControlType.InternalPriority:
+			case 2:
 				if (s.yaw == 0)
 					s.yaw = KSPSerialPort.VControls.Yaw;
 				break;
-			case SettingsNStuff.ControlType.ExternalPriority:
+			case 3:
 				if (KSPSerialPort.VControls.Yaw != 0)
 					s.yaw = KSPSerialPort.VControls.Yaw;
 				break;
@@ -1092,14 +1091,14 @@ namespace KSPSerialIO
 
 			switch (SettingsNStuff.TXEnable)
 			{
-			case SettingsNStuff.ControlType.ExternalTotal:
+			case 1:
 				s.X = KSPSerialPort.VControls.TX;
 				break;
-			case SettingsNStuff.ControlType.InternalPriority:
+			case 2:
 				if (s.X == 0)
 					s.X = KSPSerialPort.VControls.TX;
 				break;
-			case SettingsNStuff.ControlType.ExternalPriority:
+			case 3:
 				if (KSPSerialPort.VControls.TX != 0)
 					s.X = KSPSerialPort.VControls.TX;
 				break;
@@ -1109,14 +1108,14 @@ namespace KSPSerialIO
 
 			switch (SettingsNStuff.TYEnable)
 			{
-			case SettingsNStuff.ControlType.ExternalTotal:
+			case 1:
 				s.Y = KSPSerialPort.VControls.TY;
 				break;
-			case SettingsNStuff.ControlType.InternalPriority:
+			case 2:
 				if (s.Y == 0)
 					s.Y = KSPSerialPort.VControls.TY;
 				break;
-			case SettingsNStuff.ControlType.ExternalPriority:
+			case 3:
 				if (KSPSerialPort.VControls.TY != 0)
 					s.Y = KSPSerialPort.VControls.TY;
 				break;
@@ -1126,14 +1125,14 @@ namespace KSPSerialIO
 
 			switch (SettingsNStuff.TZEnable)
 			{
-			case SettingsNStuff.ControlType.ExternalTotal:
+			case 1:
 				s.Z = KSPSerialPort.VControls.TZ;
 				break;
-			case SettingsNStuff.ControlType.InternalPriority:
+			case 2:
 				if (s.Z == 0)
 					s.Z = KSPSerialPort.VControls.TZ;
 				break;
-			case SettingsNStuff.ControlType.ExternalPriority:
+			case 3:
 				if (KSPSerialPort.VControls.TZ != 0)
 					s.Z = KSPSerialPort.VControls.TZ;
 				break;
