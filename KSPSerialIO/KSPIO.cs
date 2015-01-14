@@ -129,18 +129,18 @@ namespace KSPSerialIO
         public static double refreshrate;
         public static int HandshakeDelay;
         public static int BaudRate;
-		// Throttle and axis controls have the following settings:
-		// 0: The internal value (supplied by KSP) is always used.
-		// 1: The external value (read from serial packet) is always used.
-		// 2: If the internal value is not zero use it, otherwise use the external value.
-		// 3: If the external value is not zero use it, otherwise use the internal value.
-		public static int ThrottleEnable;
-		public static int PitchEnable;
-		public static int RollEnable;
-		public static int YawEnable;
-		public static int TXEnable;
-		public static int TYEnable;
-		public static int TZEnable;
+        // Throttle and axis controls have the following settings:
+        // 0: The internal value (supplied by KSP) is always used.
+        // 1: The external value (read from serial packet) is always used.
+        // 2: If the internal value is not zero use it, otherwise use the external value.
+        // 3: If the external value is not zero use it, otherwise use the internal value.
+        public static int ThrottleEnable;
+        public static int PitchEnable;
+        public static int RollEnable;
+        public static int YawEnable;
+        public static int TXEnable;
+        public static int TYEnable;
+        public static int TZEnable;
         public static double SASTol;
 
         void Awake()
@@ -163,25 +163,25 @@ namespace KSPSerialIO
             HandshakeDelay = cfg.GetValue<int>("HandshakeDelay");
             print("KSPSerialIO: Handshake Delay = " + HandshakeDelay.ToString());
 
-			ThrottleEnable = cfg.GetValue<int>("ThrottleEnable");
+            ThrottleEnable = cfg.GetValue<int>("ThrottleEnable");
             print("KSPSerialIO: Throttle Enable = " + ThrottleEnable.ToString());
 
-			PitchEnable = cfg.GetValue<int>("PitchEnable");
+            PitchEnable = cfg.GetValue<int>("PitchEnable");
             print("KSPSerialIO: Pitch Enable = " + PitchEnable.ToString());
 
-			RollEnable = cfg.GetValue<int>("RollEnable");
+            RollEnable = cfg.GetValue<int>("RollEnable");
             print("KSPSerialIO: Roll Enable = " + RollEnable.ToString());
 
-			YawEnable = cfg.GetValue<int>("YawEnable");
+            YawEnable = cfg.GetValue<int>("YawEnable");
             print("KSPSerialIO: Yaw Enable = " + YawEnable.ToString());
 
-			TXEnable = cfg.GetValue<int>("TXEnable");
+            TXEnable = cfg.GetValue<int>("TXEnable");
             print("KSPSerialIO: Translate X Enable = " + TXEnable.ToString());
 
-			TYEnable = cfg.GetValue<int>("TYEnable");
+            TYEnable = cfg.GetValue<int>("TYEnable");
             print("KSPSerialIO: Translate Y Enable = " + TYEnable.ToString());
 
-			TZEnable = cfg.GetValue<int>("TZEnable");
+            TZEnable = cfg.GetValue<int>("TZEnable");
             print("KSPSerialIO: Translate Z Enable = " + TZEnable.ToString());
 
             SASTol = cfg.GetValue<double>("SASTol");
@@ -275,16 +275,16 @@ namespace KSPSerialIO
             return obj;
         }
         /*
-        private static T ReadUsingMarshalUnsafe<T>(byte[] data) where T : struct
-        {
-            unsafe
-            {
-                fixed (byte* p = &data[0])
-                {
-                    return (T)Marshal.PtrToStructure(new IntPtr(p), typeof(T));
-                }
-            }
-        }
+          private static T ReadUsingMarshalUnsafe<T>(byte[] data) where T : struct
+          {
+          unsafe
+          {
+          fixed (byte* p = &data[0])
+          {
+          return (T)Marshal.PtrToStructure(new IntPtr(p), typeof(T));
+          }
+          }
+          }
         */
         void initializeDataPackets()
         {
