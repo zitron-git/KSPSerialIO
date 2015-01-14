@@ -320,7 +320,7 @@ namespace KSPSerialIO
                 try
                 {
                     //Use registry hack to get a list of serial ports until we get system.io.ports
-                    RegistryKey SerialCOMSKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DEVICEMAP\SERIALCOMM\");
+                    RegistryKey SerialCOMSKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\\DEVICEMAP\\SERIALCOMM\\");
 
                     Begin();
 
