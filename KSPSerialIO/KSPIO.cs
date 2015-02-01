@@ -144,18 +144,24 @@ namespace KSPSerialIO
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class SettingsNStuff : MonoBehaviour
     {
+
         public static PluginConfiguration cfg = PluginConfiguration.CreateForType<SettingsNStuff>();
         public static string DefaultPort;
         public static double refreshrate;
         public static int HandshakeDelay;
         public static int BaudRate;
-        public static bool ThrottleEnable;
-        public static bool PitchEnable;
-        public static bool RollEnable;
-        public static bool YawEnable;
-        public static bool TXEnable;
-        public static bool TYEnable;
-        public static bool TZEnable;
+        // Throttle and axis controls have the following settings:
+        // 0: The internal value (supplied by KSP) is always used.
+        // 1: The external value (read from serial packet) is always used.
+        // 2: If the internal value is not zero use it, otherwise use the external value.
+        // 3: If the external value is not zero use it, otherwise use the internal value.
+        public static int ThrottleEnable;
+        public static int PitchEnable;
+        public static int RollEnable;
+        public static int YawEnable;
+        public static int TXEnable;
+        public static int TYEnable;
+        public static int TZEnable;
         public static double SASTol;
 
         void Awake()
@@ -178,25 +184,25 @@ namespace KSPSerialIO
             HandshakeDelay = cfg.GetValue<int>("HandshakeDelay");
             print("KSPSerialIO: Handshake Delay = " + HandshakeDelay.ToString());
 
-            ThrottleEnable = cfg.GetValue<bool>("ThrottleEnable");
+            ThrottleEnable = cfg.GetValue<int>("ThrottleEnable");
             print("KSPSerialIO: Throttle Enable = " + ThrottleEnable.ToString());
 
-            PitchEnable = cfg.GetValue<bool>("PitchEnable");
+            PitchEnable = cfg.GetValue<int>("PitchEnable");
             print("KSPSerialIO: Pitch Enable = " + PitchEnable.ToString());
 
-            RollEnable = cfg.GetValue<bool>("RollEnable");
+            RollEnable = cfg.GetValue<int>("RollEnable");
             print("KSPSerialIO: Roll Enable = " + RollEnable.ToString());
 
-            YawEnable = cfg.GetValue<bool>("YawEnable");
+            YawEnable = cfg.GetValue<int>("YawEnable");
             print("KSPSerialIO: Yaw Enable = " + YawEnable.ToString());
 
-            TXEnable = cfg.GetValue<bool>("TXEnable");
+            TXEnable = cfg.GetValue<int>("TXEnable");
             print("KSPSerialIO: Translate X Enable = " + TXEnable.ToString());
 
-            TYEnable = cfg.GetValue<bool>("TYEnable");
+            TYEnable = cfg.GetValue<int>("TYEnable");
             print("KSPSerialIO: Translate Y Enable = " + TYEnable.ToString());
 
-            TZEnable = cfg.GetValue<bool>("TZEnable");
+            TZEnable = cfg.GetValue<int>("TZEnable");
             print("KSPSerialIO: Translate Z Enable = " + TZEnable.ToString());
 
             SASTol = cfg.GetValue<double>("SASTol");
@@ -290,16 +296,16 @@ namespace KSPSerialIO
             return obj;
         }
         /*
-        private static T ReadUsingMarshalUnsafe<T>(byte[] data) where T : struct
-        {
-            unsafe
-            {
-                fixed (byte* p = &data[0])
-                {
-                    return (T)Marshal.PtrToStructure(new IntPtr(p), typeof(T));
-                }
-            }
-        }
+          private static T ReadUsingMarshalUnsafe<T>(byte[] data) where T : struct
+          {
+          unsafe
+          {
+          fixed (byte* p = &data[0])
+          {
+          return (T)Marshal.PtrToStructure(new IntPtr(p), typeof(T));
+          }
+          }
+          }
         */
         void initializeDataPackets()
         {
@@ -335,7 +341,7 @@ namespace KSPSerialIO
                 try
                 {
                     //Use registry hack to get a list of serial ports until we get system.io.ports
-                    RegistryKey SerialCOMSKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DEVICEMAP\SERIALCOMM\");
+                    RegistryKey SerialCOMSKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\\DEVICEMAP\\SERIALCOMM\\");
 
                     Begin();
 
@@ -1075,27 +1081,128 @@ namespace KSPSerialIO
 
         private void AxisInput(FlightCtrlState s)
         {
+			switch (SettingsNStuff.ThrottleEnable)
+			{
+			case 1:
+				s.mainThrottle = KSPSerialPort.VControls.Throttle;
+				break;
+			case 2:
+				if (s.mainThrottle == 0)
+				{
+					s.mainThrottle = KSPSerialPort.VControls.Throttle;
+				}
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.Throttle != 0)
+				{
+					s.mainThrottle = KSPSerialPort.VControls.Throttle;
+				}
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.ThrottleEnable)
-                s.mainThrottle = KSPSerialPort.VControls.Throttle;
+			switch (SettingsNStuff.PitchEnable)
+			{
+			case 1:
+				s.pitch = KSPSerialPort.VControls.Pitch;
+				break;
+			case 2:
+				if (s.pitch == 0)
+					s.pitch = KSPSerialPort.VControls.Pitch;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.Pitch != 0)
+					s.pitch = KSPSerialPort.VControls.Pitch;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.PitchEnable)
-                s.pitch = KSPSerialPort.VControls.Pitch;
+			switch (SettingsNStuff.RollEnable)
+			{
+			case 1:
+				s.roll = KSPSerialPort.VControls.Roll;
+				break;
+			case 2:
+				if (s.roll == 0)
+					s.roll = KSPSerialPort.VControls.Roll;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.Roll != 0)
+					s.roll = KSPSerialPort.VControls.Roll;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.RollEnable)
-                s.roll = KSPSerialPort.VControls.Roll;
+			switch (SettingsNStuff.YawEnable)
+			{
+			case 1:
+				s.yaw = KSPSerialPort.VControls.Yaw;
+				break;
+			case 2:
+				if (s.yaw == 0)
+					s.yaw = KSPSerialPort.VControls.Yaw;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.Yaw != 0)
+					s.yaw = KSPSerialPort.VControls.Yaw;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.YawEnable)
-                s.yaw = KSPSerialPort.VControls.Yaw;
+			switch (SettingsNStuff.TXEnable)
+			{
+			case 1:
+				s.X = KSPSerialPort.VControls.TX;
+				break;
+			case 2:
+				if (s.X == 0)
+					s.X = KSPSerialPort.VControls.TX;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.TX != 0)
+					s.X = KSPSerialPort.VControls.TX;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.TXEnable)
-                s.X = KSPSerialPort.VControls.TX;
+			switch (SettingsNStuff.TYEnable)
+			{
+			case 1:
+				s.Y = KSPSerialPort.VControls.TY;
+				break;
+			case 2:
+				if (s.Y == 0)
+					s.Y = KSPSerialPort.VControls.TY;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.TY != 0)
+					s.Y = KSPSerialPort.VControls.TY;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.TYEnable)
-                s.Y = KSPSerialPort.VControls.TY;
-
-            if (SettingsNStuff.TZEnable)
-                s.Z = KSPSerialPort.VControls.TZ;
+			switch (SettingsNStuff.TZEnable)
+			{
+			case 1:
+				s.Z = KSPSerialPort.VControls.TZ;
+				break;
+			case 2:
+				if (s.Z == 0)
+					s.Z = KSPSerialPort.VControls.TZ;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.TZ != 0)
+					s.Z = KSPSerialPort.VControls.TZ;
+				break;
+			default:
+				break;
+			}
 
         }
 
