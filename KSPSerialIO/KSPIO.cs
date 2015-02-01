@@ -89,7 +89,9 @@ namespace KSPSerialIO
         public short TX;                           //-1000 -> 1000
         public short TY;                           //-1000 -> 1000
         public short TZ;                           //-1000 -> 1000
-        public short Throttle;                     //    0 -> 1000
+        public short WheelSteer;                   //-1000 -> 1000
+        public short Throttle;                     // 0 -> 1000
+        public short WheelThrottle;                // 0 -> 1000
     };
 
     public struct VesselControls
@@ -110,7 +112,10 @@ namespace KSPSerialIO
         public float TX;
         public float TY;
         public float TZ;
+        public float WheelSteer;
         public float Throttle;
+        public float WheelThrottle;
+
     };
 
     public struct IOResource
@@ -154,14 +159,16 @@ namespace KSPSerialIO
         // 0: The internal value (supplied by KSP) is always used.
         // 1: The external value (read from serial packet) is always used.
         // 2: If the internal value is not zero use it, otherwise use the external value.
-        // 3: If the external value is not zero use it, otherwise use the internal value.
-        public static int ThrottleEnable;
+        // 3: If the external value is not zero use it, otherwise use the internal value.        
         public static int PitchEnable;
         public static int RollEnable;
         public static int YawEnable;
         public static int TXEnable;
         public static int TYEnable;
         public static int TZEnable;
+        public static int WheelSteerEnable;
+        public static int ThrottleEnable;
+        public static int WheelThrottleEnable;
         public static double SASTol;
 
         void Awake()
@@ -184,9 +191,6 @@ namespace KSPSerialIO
             HandshakeDelay = cfg.GetValue<int>("HandshakeDelay");
             print("KSPSerialIO: Handshake Delay = " + HandshakeDelay.ToString());
 
-            ThrottleEnable = cfg.GetValue<int>("ThrottleEnable");
-            print("KSPSerialIO: Throttle Enable = " + ThrottleEnable.ToString());
-
             PitchEnable = cfg.GetValue<int>("PitchEnable");
             print("KSPSerialIO: Pitch Enable = " + PitchEnable.ToString());
 
@@ -204,6 +208,15 @@ namespace KSPSerialIO
 
             TZEnable = cfg.GetValue<int>("TZEnable");
             print("KSPSerialIO: Translate Z Enable = " + TZEnable.ToString());
+
+            WheelSteerEnable = cfg.GetValue<int>("WheelSteerEnable");
+            print("KSPSerialIO: Wheel Steering Enable = " + WheelSteerEnable.ToString());
+
+            ThrottleEnable = cfg.GetValue<int>("ThrottleEnable");
+            print("KSPSerialIO: Throttle Enable = " + ThrottleEnable.ToString());
+
+            WheelThrottleEnable = cfg.GetValue<int>("WheelThrottleEnable");
+            print("KSPSerialIO: Wheel Throttle Enable = " + WheelThrottleEnable.ToString());
 
             SASTol = cfg.GetValue<double>("SASTol");
             print("KSPSerialIO: SAS Tol = " + SASTol.ToString());
@@ -333,7 +346,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.17.0");
+                Debug.Log("KSPSerialIO: Version 0.17.1");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -575,13 +588,15 @@ namespace KSPSerialIO
             VControls.Precision = BitMathByte(CPacket.MainControls, 2);
             VControls.Abort = BitMathByte(CPacket.MainControls, 1);
             VControls.Stage = BitMathByte(CPacket.MainControls, 0);
-            VControls.Throttle = (float)CPacket.Throttle / 1000.0F;
             VControls.Pitch = (float)CPacket.Pitch / 1000.0F;
             VControls.Roll = (float)CPacket.Roll / 1000.0F;
             VControls.Yaw = (float)CPacket.Yaw / 1000.0F;
             VControls.TX = (float)CPacket.TX / 1000.0F;
             VControls.TY = (float)CPacket.TY / 1000.0F;
             VControls.TZ = (float)CPacket.TZ / 1000.0F;
+            VControls.WheelSteer = (float)CPacket.WheelSteer / 1000.0F;
+            VControls.Throttle = (float)CPacket.Throttle / 1000.0F;
+            VControls.WheelThrottle = (float)CPacket.WheelThrottle / 1000.0F;
 
             for (int j = 1; j <= 10; j++)
             {
@@ -1035,7 +1050,7 @@ namespace KSPSerialIO
             }//end if null and same vessel
             else
             {
-                Debug.Log("KSPSerialIO: ActiveVessel not found");
+                //Debug.Log("KSPSerialIO: ActiveVessel not found");
                 //ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
             }
 
@@ -1204,6 +1219,47 @@ namespace KSPSerialIO
 				break;
 			}
 
+            switch (SettingsNStuff.WheelSteerEnable)
+            {
+                case 1:
+                    s.wheelSteer = KSPSerialPort.VControls.WheelSteer;
+                    break;
+                case 2:
+                    if (s.wheelSteer == 0)
+                    {
+                        s.wheelSteer = KSPSerialPort.VControls.WheelSteer;
+                    }
+                    break;
+                case 3:
+                    if (KSPSerialPort.VControls.WheelSteer != 0)
+                    {
+                        s.wheelSteer = KSPSerialPort.VControls.WheelSteer;
+                    }
+                    break;
+                default:
+                    break;
+            }
+
+            switch (SettingsNStuff.WheelThrottleEnable)
+            {
+                case 1:
+                    s.wheelThrottle = KSPSerialPort.VControls.WheelThrottle;
+                    break;
+                case 2:
+                    if (s.wheelThrottle == 0)
+                    {
+                        s.wheelThrottle = KSPSerialPort.VControls.WheelThrottle;
+                    }
+                    break;
+                case 3:
+                    if (KSPSerialPort.VControls.WheelThrottle != 0)
+                    {
+                        s.wheelThrottle = KSPSerialPort.VControls.WheelThrottle;
+                    }
+                    break;
+                default:
+                    break;
+            }
         }
 
         // this recursive stage look up stuff stolen and modified from KOS and others
