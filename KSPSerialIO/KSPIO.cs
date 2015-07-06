@@ -63,6 +63,10 @@ namespace KSPSerialIO
         public float Roll;          //44
         public float Heading;       //45
         public UInt16 ActionGroups; //46  status bit order:SAS, RCS, Light, Gear, Brakes, Abort, Custom01 - 10 
+        public byte SOINumber;      //47  SOI Number (decimal format: sun-planet-moon e.g. 130 = kerbin, 131 = mun)
+        public byte MaxOverHeat;    //48  Max part overheat (% percent)
+        public float MachNumber;    //49
+        public float IAS;           //50  Indicated Air Speed
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -346,7 +350,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.17.1");
+                Debug.Log("KSPSerialIO: Version 0.17.3");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -867,8 +871,21 @@ namespace KSPSerialIO
                     KSPSerialPort.ControlStatus((int)enumAG.Custom09, ActiveVessel.ActionGroups[KSPActionGroup.Custom09]);
                     KSPSerialPort.ControlStatus((int)enumAG.Custom10, ActiveVessel.ActionGroups[KSPActionGroup.Custom10]);
 
+                    KSPSerialPort.VData.SOINumber = GetSOINumber(ActiveVessel.orbit.referenceBody.name);
+
+                    KSPSerialPort.VData.MaxOverHeat = GetMaxOverHeat(ActiveVessel);
+                    KSPSerialPort.VData.MachNumber = (float)ActiveVessel.mach;
+                    KSPSerialPort.VData.IAS = (float)ActiveVessel.indicatedAirSpeed;
+
+                    
                     #region debugjunk
                     /*
+                    Debug.Log("KSPSerialIO: Overheat " + KSPSerialPort.VData.MaxOverHeat.ToString());
+                    Debug.Log("KSPSerialIO: Mach " + KSPSerialPort.VData.MachNumber.ToString());
+                    Debug.Log("KSPSerialIO: IAS " + KSPSerialPort.VData.IAS.ToString());
+                     * 
+                    Debug.Log("KSPSerialIO: SOI " + ActiveVessel.orbit.referenceBody.name + KSPSerialPort.VData.SOINumber.ToString());
+                    
                     ScreenMessages.PostScreenMessage(KSPSerialPort.VData.OxidizerS.ToString() + "/" + KSPSerialPort.VData.OxidizerTotS +
                         "   " + KSPSerialPort.VData.Oxidizer.ToString() + "/" + KSPSerialPort.VData.OxidizerTot);
                     */
@@ -1058,11 +1075,29 @@ namespace KSPSerialIO
         }
 
         #region utilities
+
+        private byte GetMaxOverHeat(Vessel V)
+        {
+            byte percent = 0;
+            double percentD = 0, percentP = 0;
+
+            foreach (Part p in ActiveVessel.parts)
+            {
+                percentP = p.temperature/p.maxTemp;
+                if (percentD < percentP)
+                    percentD = percentP;
+            }
+
+            percent = (byte)Math.Round(percentD*100);
+            return percent;
+        }
+
+
         private IOResource GetResourceTotal(Vessel V, string resourceName)
         {
             IOResource R = new IOResource();
 
-            foreach (Part p in ActiveVessel.parts)
+            foreach (Part p in V.parts)
             {
                 foreach (PartResource pr in p.Resources)
                 {
@@ -1260,6 +1295,70 @@ namespace KSPSerialIO
                 default:
                     break;
             }
+        }
+
+        private byte GetSOINumber(string name)
+        {
+            byte SOI;
+
+            switch (name.ToLower())
+            {
+                case "sun":
+                    SOI = 100;
+                    break;
+                case "moho":
+                    SOI = 110;
+                    break;
+                case "eve":
+                    SOI = 120;
+                    break;
+                case "gilly":
+                    SOI = 121;
+                    break;
+                case "kerbin":
+                    SOI = 130;
+                    break;
+                case "mun":
+                    SOI = 131;
+                    break;
+                case "minmus":
+                    SOI = 132;
+                    break;
+                case "duna":
+                    SOI = 140;
+                    break;
+                case "ike":
+                    SOI = 141;
+                    break;
+                case "dres":
+                    SOI = 150;
+                    break;
+                case "jool":
+                    SOI = 160;
+                    break;
+                case "laythe":
+                    SOI = 161;
+                    break;
+                case "vall":
+                    SOI = 162;
+                    break;
+                case "tylo":
+                    SOI = 163;
+                    break;
+                case "bop":
+                    SOI = 164;
+                    break;
+                case "pol":
+                    SOI = 165;
+                    break;
+                case "eeloo":
+                    SOI = 170;
+                    break;
+                default:
+                    SOI = 0;
+                    break;
+            }
+            return SOI;
         }
 
         // this recursive stage look up stuff stolen and modified from KOS and others
