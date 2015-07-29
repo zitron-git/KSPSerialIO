@@ -62,6 +62,13 @@ namespace KSPSerialIO
         public float Pitch;         //43
         public float Roll;          //44
         public float Heading;       //45
+        public UInt16 ActionGroups; //46  status bit order:SAS, RCS, Light, Gear, Brakes, Abort, Custom01 - 10 
+        public byte SOINumber;      //47  SOI Number (decimal format: sun-planet-moon e.g. 130 = kerbin, 131 = mun)
+        public byte MaxOverHeat;    //48  Max part overheat (% percent)
+        public float MachNumber;    //49
+        public float IAS;           //50  Indicated Air Speed
+        public byte CurrentStage;   //51  Current stage number
+        public byte TotalStage;     //52  TotalNumber of stages
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -88,7 +95,9 @@ namespace KSPSerialIO
         public short TX;                           //-1000 -> 1000
         public short TY;                           //-1000 -> 1000
         public short TZ;                           //-1000 -> 1000
-        public short Throttle;                     //    0 -> 1000
+        public short WheelSteer;                   //-1000 -> 1000
+        public short Throttle;                     // 0 -> 1000
+        public short WheelThrottle;                // 0 -> 1000
     };
 
     public struct VesselControls
@@ -109,7 +118,9 @@ namespace KSPSerialIO
         public float TX;
         public float TY;
         public float TZ;
+        public float WheelSteer;
         public float Throttle;
+        public float WheelThrottle;
     };
 
     public struct IOResource
@@ -120,21 +131,49 @@ namespace KSPSerialIO
 
     #endregion
 
+    enum enumAG : int
+    {
+        SAS, 
+        RCS,        
+        Light, 
+        Gear, 
+        Brakes, 
+        Abort, 
+        Custom01, 
+        Custom02, 
+        Custom03, 
+        Custom04, 
+        Custom05, 
+        Custom06, 
+        Custom07, 
+        Custom08, 
+        Custom09, 
+        Custom10, 
+    };
+
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class SettingsNStuff : MonoBehaviour
     {
+
         public static PluginConfiguration cfg = PluginConfiguration.CreateForType<SettingsNStuff>();
         public static string DefaultPort;
         public static double refreshrate;
         public static int HandshakeDelay;
         public static int BaudRate;
-        public static bool ThrottleEnable;
-        public static bool PitchEnable;
-        public static bool RollEnable;
-        public static bool YawEnable;
-        public static bool TXEnable;
-        public static bool TYEnable;
-        public static bool TZEnable;
+        // Throttle and axis controls have the following settings:
+        // 0: The internal value (supplied by KSP) is always used.
+        // 1: The external value (read from serial packet) is always used.
+        // 2: If the internal value is not zero use it, otherwise use the external value.
+        // 3: If the external value is not zero use it, otherwise use the internal value.        
+        public static int PitchEnable;
+        public static int RollEnable;
+        public static int YawEnable;
+        public static int TXEnable;
+        public static int TYEnable;
+        public static int TZEnable;
+        public static int WheelSteerEnable;
+        public static int ThrottleEnable;
+        public static int WheelThrottleEnable;
         public static double SASTol;
 
         void Awake()
@@ -157,26 +196,32 @@ namespace KSPSerialIO
             HandshakeDelay = cfg.GetValue<int>("HandshakeDelay");
             print("KSPSerialIO: Handshake Delay = " + HandshakeDelay.ToString());
 
-            ThrottleEnable = cfg.GetValue<bool>("ThrottleEnable");
-            print("KSPSerialIO: Throttle Enable = " + ThrottleEnable.ToString());
-
-            PitchEnable = cfg.GetValue<bool>("PitchEnable");
+            PitchEnable = cfg.GetValue<int>("PitchEnable");
             print("KSPSerialIO: Pitch Enable = " + PitchEnable.ToString());
 
-            RollEnable = cfg.GetValue<bool>("RollEnable");
+            RollEnable = cfg.GetValue<int>("RollEnable");
             print("KSPSerialIO: Roll Enable = " + RollEnable.ToString());
 
-            YawEnable = cfg.GetValue<bool>("YawEnable");
+            YawEnable = cfg.GetValue<int>("YawEnable");
             print("KSPSerialIO: Yaw Enable = " + YawEnable.ToString());
 
-            TXEnable = cfg.GetValue<bool>("TXEnable");
+            TXEnable = cfg.GetValue<int>("TXEnable");
             print("KSPSerialIO: Translate X Enable = " + TXEnable.ToString());
 
-            TYEnable = cfg.GetValue<bool>("TYEnable");
+            TYEnable = cfg.GetValue<int>("TYEnable");
             print("KSPSerialIO: Translate Y Enable = " + TYEnable.ToString());
 
-            TZEnable = cfg.GetValue<bool>("TZEnable");
+            TZEnable = cfg.GetValue<int>("TZEnable");
             print("KSPSerialIO: Translate Z Enable = " + TZEnable.ToString());
+
+            WheelSteerEnable = cfg.GetValue<int>("WheelSteerEnable");
+            print("KSPSerialIO: Wheel Steering Enable = " + WheelSteerEnable.ToString());
+
+            ThrottleEnable = cfg.GetValue<int>("ThrottleEnable");
+            print("KSPSerialIO: Throttle Enable = " + ThrottleEnable.ToString());
+
+            WheelThrottleEnable = cfg.GetValue<int>("WheelThrottleEnable");
+            print("KSPSerialIO: Wheel Throttle Enable = " + WheelThrottleEnable.ToString());
 
             SASTol = cfg.GetValue<double>("SASTol");
             print("KSPSerialIO: SAS Tol = " + SASTol.ToString());
@@ -269,16 +314,16 @@ namespace KSPSerialIO
             return obj;
         }
         /*
-        private static T ReadUsingMarshalUnsafe<T>(byte[] data) where T : struct
-        {
-            unsafe
-            {
-                fixed (byte* p = &data[0])
-                {
-                    return (T)Marshal.PtrToStructure(new IntPtr(p), typeof(T));
-                }
-            }
-        }
+          private static T ReadUsingMarshalUnsafe<T>(byte[] data) where T : struct
+          {
+          unsafe
+          {
+          fixed (byte* p = &data[0])
+          {
+          return (T)Marshal.PtrToStructure(new IntPtr(p), typeof(T));
+          }
+          }
+          }
         */
         void initializeDataPackets()
         {
@@ -306,7 +351,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.15.4");
+                Debug.Log("KSPSerialIO: Version 0.17.4");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -314,7 +359,7 @@ namespace KSPSerialIO
                 try
                 {
                     //Use registry hack to get a list of serial ports until we get system.io.ports
-                    RegistryKey SerialCOMSKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DEVICEMAP\SERIALCOMM\");
+                    RegistryKey SerialCOMSKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\\DEVICEMAP\\SERIALCOMM\\");
 
                     Begin();
 
@@ -433,9 +478,9 @@ namespace KSPSerialIO
                             Invoke("HandShake", 0);
 
                             if ((HPacket.M1 == 3) && (HPacket.M2 == 1) && (HPacket.M3 == 4))
-                            {                                
+                            {
                                 DisplayFound = true;
-                                
+
                             }
                             else
                             {
@@ -548,13 +593,15 @@ namespace KSPSerialIO
             VControls.Precision = BitMathByte(CPacket.MainControls, 2);
             VControls.Abort = BitMathByte(CPacket.MainControls, 1);
             VControls.Stage = BitMathByte(CPacket.MainControls, 0);
-            VControls.Throttle = (float)CPacket.Throttle / 1000.0F;
             VControls.Pitch = (float)CPacket.Pitch / 1000.0F;
             VControls.Roll = (float)CPacket.Roll / 1000.0F;
             VControls.Yaw = (float)CPacket.Yaw / 1000.0F;
             VControls.TX = (float)CPacket.TX / 1000.0F;
             VControls.TY = (float)CPacket.TY / 1000.0F;
             VControls.TZ = (float)CPacket.TZ / 1000.0F;
+            VControls.WheelSteer = (float)CPacket.WheelSteer / 1000.0F;
+            VControls.Throttle = (float)CPacket.Throttle / 1000.0F;
+            VControls.WheelThrottle = (float)CPacket.WheelThrottle / 1000.0F;
 
             for (int j = 1; j <= 10; j++)
             {
@@ -585,6 +632,15 @@ namespace KSPSerialIO
             Debug.Log(Port.BytesToRead.ToString() + "BTR");
         }
 
+
+        public static void ControlStatus(int n, bool s)
+        {
+            if (s)
+                VData.ActionGroups |= (UInt16)(1 << n);       // forces nth bit of x to be 1.  all other bits left alone.
+            else
+                VData.ActionGroups &= (UInt16)~(1 << n);      // forces nth bit of x to be 0.  all other bits left alone.
+        }
+
         void OnDestroy()
         {
             if (KSPSerialPort.Port.IsOpen)
@@ -603,6 +659,7 @@ namespace KSPSerialIO
         private double deltaT = 1.0f;
         private double missionTime = 0;
         private double missionTimeOld = 0;
+        private double theTime = 0;
 
         public double refreshrate = 1.0f;
         public static Vessel ActiveVessel;
@@ -675,15 +732,19 @@ namespace KSPSerialIO
 
         void Update()
         {
-            if (FlightGlobals.ActiveVessel != null)
+            if (FlightGlobals.ActiveVessel != null && KSPSerialPort.Port.IsOpen)
             {
+                //Debug.Log("KSPSerialIO: 1");
                 //If the current active vessel is not what we were using, we need to remove controls from the old 
                 //vessel and attache it to the current one
-                if (ActiveVessel.id != FlightGlobals.ActiveVessel.id) 
+                if (ActiveVessel.id != FlightGlobals.ActiveVessel.id)
                 {
                     ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
                     ActiveVessel = FlightGlobals.ActiveVessel;
                     ActiveVessel.OnFlyByWire += new FlightInputCallback(AxisInput);
+                    //sync some inputs on vessel switch
+                    ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.RCS, KSPSerialPort.VControls.RCS);
+                    ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, KSPSerialPort.VControls.SAS);
                     Debug.Log("KSPSerialIO: ActiveVessel changed");
                 }
                 else
@@ -692,13 +753,15 @@ namespace KSPSerialIO
                 }
 
                 #region outputs
-                if ((Time.time - lastUpdate) > refreshrate && KSPSerialPort.Port.IsOpen)
+                theTime = Time.unscaledTime;
+                if ((theTime - lastUpdate) > refreshrate)
                 {
-                    lastUpdate = Time.time;
+                    //Debug.Log("KSPSerialIO: 2");
+
+                    lastUpdate = theTime;
 
                     List<Part> ActiveEngines = new List<Part>();
                     ActiveEngines = GetListOfActivatedEngines(ActiveVessel);
-
 
                     KSPSerialPort.VData.AP = (float)ActiveVessel.orbit.ApA;
                     KSPSerialPort.VData.PE = (float)ActiveVessel.orbit.PeA;
@@ -714,7 +777,7 @@ namespace KSPSerialIO
                     KSPSerialPort.VData.TrueAnomaly = (float)ActiveVessel.orbit.trueAnomaly;
                     KSPSerialPort.VData.period = (int)Math.Round(ActiveVessel.orbit.period);
 
-
+                    //Debug.Log("KSPSerialIO: 3");
                     double ASL = ActiveVessel.mainBody.GetAltitude(ActiveVessel.CoM);
                     double AGL = (ASL - ActiveVessel.terrainAltitude);
 
@@ -734,20 +797,14 @@ namespace KSPSerialIO
 
                     KSPSerialPort.VData.LiquidFuelTotS = (float)ProspectForResourceMax("LiquidFuel", ActiveEngines);
                     KSPSerialPort.VData.LiquidFuelS = (float)ProspectForResource("LiquidFuel", ActiveEngines);
-                    /*
-                    ScreenMessages.PostScreenMessage(KSPSerialPort.VData.LiquidFuelS.ToString() + "/" + KSPSerialPort.VData.LiquidFuelTotS +
-                        "   " + KSPSerialPort.VData.LiquidFuel.ToString() + "/" + KSPSerialPort.VData.LiquidFuelTot);
-                    */
+
                     TempR = GetResourceTotal(ActiveVessel, "Oxidizer");
                     KSPSerialPort.VData.OxidizerTot = TempR.Max;
                     KSPSerialPort.VData.Oxidizer = TempR.Current;
 
                     KSPSerialPort.VData.OxidizerTotS = (float)ProspectForResourceMax("Oxidizer", ActiveEngines);
                     KSPSerialPort.VData.OxidizerS = (float)ProspectForResource("Oxidizer", ActiveEngines);
-                    /*
-                    ScreenMessages.PostScreenMessage(KSPSerialPort.VData.OxidizerS.ToString() + "/" + KSPSerialPort.VData.OxidizerTotS +
-                        "   " + KSPSerialPort.VData.Oxidizer.ToString() + "/" + KSPSerialPort.VData.OxidizerTot);
-                    */
+
                     TempR = GetResourceTotal(ActiveVessel, "ElectricCharge");
                     KSPSerialPort.VData.EChargeTot = TempR.Max;
                     KSPSerialPort.VData.ECharge = TempR.Current;
@@ -773,38 +830,92 @@ namespace KSPSerialIO
 
                     KSPSerialPort.VData.VOrbit = (float)ActiveVessel.orbit.GetVel().magnitude;
 
-                    if (FlightGlobals.ActiveVessel.patchedConicSolver.maneuverNodes.Count > 0)
+                    //Debug.Log("KSPSerialIO: 4");
+
+                    KSPSerialPort.VData.MNTime = 0;
+                    KSPSerialPort.VData.MNDeltaV = 0;
+
+                    if (ActiveVessel.patchedConicSolver != null)
                     {
-                        KSPSerialPort.VData.MNTime = (UInt32)Math.Round(ActiveVessel.patchedConicSolver.maneuverNodes[0].UT - Planetarium.GetUniversalTime());
-                        KSPSerialPort.VData.MNDeltaV = (float)FlightGlobals.ActiveVessel.patchedConicSolver.maneuverNodes[0].DeltaV.magnitude;
+                        if (ActiveVessel.patchedConicSolver.maneuverNodes != null)
+                        {
+                            if (ActiveVessel.patchedConicSolver.maneuverNodes.Count > 0)
+                            {
+                                KSPSerialPort.VData.MNTime = (UInt32)Math.Round(ActiveVessel.patchedConicSolver.maneuverNodes[0].UT - Planetarium.GetUniversalTime());
+                                KSPSerialPort.VData.MNDeltaV = (float)ActiveVessel.patchedConicSolver.maneuverNodes[0].DeltaV.magnitude;
+                            }
+                        }
                     }
-                    else
-                    {
-                        KSPSerialPort.VData.MNTime = 0;
-                        KSPSerialPort.VData.MNDeltaV = 0;
-                    }                    
+
+                    //Debug.Log("KSPSerialIO: 5");
 
                     Quaternion attitude = updateHeadingPitchRollField(ActiveVessel);
-
-                    //KSPSerialPort.VData.Roll = Mathf.Atan2(2 * (x * y + w * z), w * w + x * x - y * y - z * z) * 180 / Mathf.PI;
-                    //KSPSerialPort.VData.Pitch = Mathf.Atan2(2 * (y * z + w * x), w * w - x * x - y * y + z * z) * 180 / Mathf.PI;
-                    //KSPSerialPort.VData.Heading = Mathf.Asin(-2 * (x * z - w * y)) *180 / Mathf.PI;
 
                     KSPSerialPort.VData.Roll = (float)((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z);
                     KSPSerialPort.VData.Pitch = (float)((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x);
                     KSPSerialPort.VData.Heading = (float)attitude.eulerAngles.y;
 
+                    KSPSerialPort.ControlStatus((int)enumAG.SAS, ActiveVessel.ActionGroups[KSPActionGroup.SAS]);
+                    KSPSerialPort.ControlStatus((int)enumAG.RCS, ActiveVessel.ActionGroups[KSPActionGroup.RCS]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Light, ActiveVessel.ActionGroups[KSPActionGroup.Light]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Gear, ActiveVessel.ActionGroups[KSPActionGroup.Gear]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Brakes, ActiveVessel.ActionGroups[KSPActionGroup.Brakes]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Abort, ActiveVessel.ActionGroups[KSPActionGroup.Abort]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom01, ActiveVessel.ActionGroups[KSPActionGroup.Custom01]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom02, ActiveVessel.ActionGroups[KSPActionGroup.Custom02]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom03, ActiveVessel.ActionGroups[KSPActionGroup.Custom03]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom04, ActiveVessel.ActionGroups[KSPActionGroup.Custom04]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom05, ActiveVessel.ActionGroups[KSPActionGroup.Custom05]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom06, ActiveVessel.ActionGroups[KSPActionGroup.Custom06]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom07, ActiveVessel.ActionGroups[KSPActionGroup.Custom07]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom08, ActiveVessel.ActionGroups[KSPActionGroup.Custom08]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom09, ActiveVessel.ActionGroups[KSPActionGroup.Custom09]);
+                    KSPSerialPort.ControlStatus((int)enumAG.Custom10, ActiveVessel.ActionGroups[KSPActionGroup.Custom10]);
+
+                    KSPSerialPort.VData.SOINumber = GetSOINumber(ActiveVessel.orbit.referenceBody.name);
+
+                    KSPSerialPort.VData.MaxOverHeat = GetMaxOverHeat(ActiveVessel);
+                    KSPSerialPort.VData.MachNumber = (float)ActiveVessel.mach;
+                    KSPSerialPort.VData.IAS = (float)ActiveVessel.indicatedAirSpeed;
+
+                    KSPSerialPort.VData.CurrentStage = (byte)Staging.CurrentStage;
+                    KSPSerialPort.VData.TotalStage = (byte)Staging.StageCount;
+
+                    
+
+                    #region debugjunk
+                    /*
+                    
+                    Debug.Log("KSPSerialIO: Stage " + KSPSerialPort.VData.CurrentStage.ToString() + ' ' +
+                        KSPSerialPort.VData.TotalStage.ToString()); 
+                    Debug.Log("KSPSerialIO: Overheat " + KSPSerialPort.VData.MaxOverHeat.ToString());
+                    Debug.Log("KSPSerialIO: Mach " + KSPSerialPort.VData.MachNumber.ToString());
+                    Debug.Log("KSPSerialIO: IAS " + KSPSerialPort.VData.IAS.ToString());
+                    
+                    Debug.Log("KSPSerialIO: SOI " + ActiveVessel.orbit.referenceBody.name + KSPSerialPort.VData.SOINumber.ToString());
+                    
+                    ScreenMessages.PostScreenMessage(KSPSerialPort.VData.OxidizerS.ToString() + "/" + KSPSerialPort.VData.OxidizerTotS +
+                        "   " + KSPSerialPort.VData.Oxidizer.ToString() + "/" + KSPSerialPort.VData.OxidizerTot);
+                    */
+                    //KSPSerialPort.VData.Roll = Mathf.Atan2(2 * (x * y + w * z), w * w + x * x - y * y - z * z) * 180 / Mathf.PI;
+                    //KSPSerialPort.VData.Pitch = Mathf.Atan2(2 * (y * z + w * x), w * w - x * x - y * y + z * z) * 180 / Mathf.PI;
+                    //KSPSerialPort.VData.Heading = Mathf.Asin(-2 * (x * z - w * y)) *180 / Mathf.PI;
                     //Debug.Log("KSPSerialIO: Roll    " + KSPSerialPort.VData.Roll.ToString());
                     //Debug.Log("KSPSerialIO: Pitch   " + KSPSerialPort.VData.Pitch.ToString());
                     //Debug.Log("KSPSerialIO: Heading " + KSPSerialPort.VData.Heading.ToString());
                     //Debug.Log("KSPSerialIO: VOrbit" + KSPSerialPort.VData.VOrbit.ToString());
+                    //ScreenMessages.PostScreenMessage(ActiveVessel.ActionGroups[KSPActionGroup.RCS].ToString());
                     //Debug.Log("KSPSerialIO: MNTime" + KSPSerialPort.VData.MNTime.ToString() + " MNDeltaV" + KSPSerialPort.VData.MNDeltaV.ToString());
                     //Debug.Log("KSPSerialIO: Time" + KSPSerialPort.VData.MissionTime.ToString() + " Delta Time" + KSPSerialPort.VData.deltaTime.ToString());
                     //Debug.Log("KSPSerialIO: Throttle = " + KSPSerialPort.CPacket.Throttle.ToString());
                     //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.Fuelp.ToString());
                     //ScreenMessages.PostScreenMessage(KSPSerialPort.VData.RAlt.ToString());
                     //KSPSerialPort.Port.WriteLine("Success!");
-
+                    /*
+                    ScreenMessages.PostScreenMessage(KSPSerialPort.VData.LiquidFuelS.ToString() + "/" + KSPSerialPort.VData.LiquidFuelTotS +
+                        "   " + KSPSerialPort.VData.LiquidFuel.ToString() + "/" + KSPSerialPort.VData.LiquidFuelTot);
+                    */
+                    #endregion
                     KSPSerialPort.sendPacket(KSPSerialPort.VData);
                 } //end refresh
                 #endregion
@@ -835,14 +946,14 @@ namespace KSPSerialIO
                         Math.Abs(KSPSerialPort.VControls.Roll) > SettingsNStuff.SASTol ||
                         Math.Abs(KSPSerialPort.VControls.Yaw) > SettingsNStuff.SASTol)
                     {
-                        ActiveVessel.vesselSAS.ManualOverride(true);
+                        ActiveVessel.Autopilot.SAS.ManualOverride(true);
                         //KSPSerialPort.VControlsOld.Pitch = KSPSerialPort.VControls.Pitch;
                         //KSPSerialPort.VControlsOld.Roll = KSPSerialPort.VControls.Roll;
                         //KSPSerialPort.VControlsOld.Yaw = KSPSerialPort.VControls.Yaw;
                     }
                     else
                     {
-                        ActiveVessel.vesselSAS.ManualOverride(false);
+                        ActiveVessel.Autopilot.SAS.ManualOverride(false);
                     }
 
                     //if (FlightInputHandler.RCSLock != KSPSerialPort.VControls.RCS)
@@ -960,23 +1071,51 @@ namespace KSPSerialIO
                 } //end ControlReceived
                 #endregion
 
-                
+
             }//end if null and same vessel
             else
             {
-                Debug.Log("KSPSerialIO: ActiveVessel not found");
+                //Debug.Log("KSPSerialIO: ActiveVessel not found");
                 //ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
             }
-            
-            
+
+
         }
 
         #region utilities
+
+        private byte GetMaxOverHeat(Vessel V)
+        {
+            byte percent = 0;
+            double sPercent = 0, iPercent = 0;
+            double percentD = 0, percentP = 0;
+
+            foreach (Part p in ActiveVessel.parts)
+            {
+                //internal temperature
+                iPercent = p.temperature/p.maxTemp;
+                //skin temperature
+                sPercent = p.skinTemperature/p.skinMaxTemp;
+
+                if (iPercent > sPercent)
+                    percentP = iPercent;
+                else
+                    percentP = sPercent;
+
+                if (percentD < percentP)
+                    percentD = percentP;
+            }
+
+            percent = (byte)Math.Round(percentD*100);
+            return percent;
+        }
+
+
         private IOResource GetResourceTotal(Vessel V, string resourceName)
         {
             IOResource R = new IOResource();
 
-            foreach (Part p in ActiveVessel.parts)
+            foreach (Part p in V.parts)
             {
                 foreach (PartResource pr in p.Resources)
                 {
@@ -1010,28 +1149,234 @@ namespace KSPSerialIO
 
         private void AxisInput(FlightCtrlState s)
         {
+			switch (SettingsNStuff.ThrottleEnable)
+			{
+			case 1:
+				s.mainThrottle = KSPSerialPort.VControls.Throttle;
+				break;
+			case 2:
+				if (s.mainThrottle == 0)
+				{
+					s.mainThrottle = KSPSerialPort.VControls.Throttle;
+				}
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.Throttle != 0)
+				{
+					s.mainThrottle = KSPSerialPort.VControls.Throttle;
+				}
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.ThrottleEnable)
-                s.mainThrottle = KSPSerialPort.VControls.Throttle;
+			switch (SettingsNStuff.PitchEnable)
+			{
+			case 1:
+				s.pitch = KSPSerialPort.VControls.Pitch;
+				break;
+			case 2:
+				if (s.pitch == 0)
+					s.pitch = KSPSerialPort.VControls.Pitch;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.Pitch != 0)
+					s.pitch = KSPSerialPort.VControls.Pitch;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.PitchEnable)
-                s.pitch = KSPSerialPort.VControls.Pitch;
+			switch (SettingsNStuff.RollEnable)
+			{
+			case 1:
+				s.roll = KSPSerialPort.VControls.Roll;
+				break;
+			case 2:
+				if (s.roll == 0)
+					s.roll = KSPSerialPort.VControls.Roll;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.Roll != 0)
+					s.roll = KSPSerialPort.VControls.Roll;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.RollEnable)
-                s.roll = KSPSerialPort.VControls.Roll;
+			switch (SettingsNStuff.YawEnable)
+			{
+			case 1:
+				s.yaw = KSPSerialPort.VControls.Yaw;
+				break;
+			case 2:
+				if (s.yaw == 0)
+					s.yaw = KSPSerialPort.VControls.Yaw;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.Yaw != 0)
+					s.yaw = KSPSerialPort.VControls.Yaw;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.YawEnable)
-                s.yaw = KSPSerialPort.VControls.Yaw;
+			switch (SettingsNStuff.TXEnable)
+			{
+			case 1:
+				s.X = KSPSerialPort.VControls.TX;
+				break;
+			case 2:
+				if (s.X == 0)
+					s.X = KSPSerialPort.VControls.TX;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.TX != 0)
+					s.X = KSPSerialPort.VControls.TX;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.TXEnable)
-                s.X = KSPSerialPort.VControls.TX;
+			switch (SettingsNStuff.TYEnable)
+			{
+			case 1:
+				s.Y = KSPSerialPort.VControls.TY;
+				break;
+			case 2:
+				if (s.Y == 0)
+					s.Y = KSPSerialPort.VControls.TY;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.TY != 0)
+					s.Y = KSPSerialPort.VControls.TY;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.TYEnable)
-                s.Y = KSPSerialPort.VControls.TY;
+			switch (SettingsNStuff.TZEnable)
+			{
+			case 1:
+				s.Z = KSPSerialPort.VControls.TZ;
+				break;
+			case 2:
+				if (s.Z == 0)
+					s.Z = KSPSerialPort.VControls.TZ;
+				break;
+			case 3:
+				if (KSPSerialPort.VControls.TZ != 0)
+					s.Z = KSPSerialPort.VControls.TZ;
+				break;
+			default:
+				break;
+			}
 
-            if (SettingsNStuff.TZEnable)
-                s.Z = KSPSerialPort.VControls.TZ;
+            switch (SettingsNStuff.WheelSteerEnable)
+            {
+                case 1:
+                    s.wheelSteer = KSPSerialPort.VControls.WheelSteer;
+                    break;
+                case 2:
+                    if (s.wheelSteer == 0)
+                    {
+                        s.wheelSteer = KSPSerialPort.VControls.WheelSteer;
+                    }
+                    break;
+                case 3:
+                    if (KSPSerialPort.VControls.WheelSteer != 0)
+                    {
+                        s.wheelSteer = KSPSerialPort.VControls.WheelSteer;
+                    }
+                    break;
+                default:
+                    break;
+            }
 
+            switch (SettingsNStuff.WheelThrottleEnable)
+            {
+                case 1:
+                    s.wheelThrottle = KSPSerialPort.VControls.WheelThrottle;
+                    break;
+                case 2:
+                    if (s.wheelThrottle == 0)
+                    {
+                        s.wheelThrottle = KSPSerialPort.VControls.WheelThrottle;
+                    }
+                    break;
+                case 3:
+                    if (KSPSerialPort.VControls.WheelThrottle != 0)
+                    {
+                        s.wheelThrottle = KSPSerialPort.VControls.WheelThrottle;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private byte GetSOINumber(string name)
+        {
+            byte SOI;
+
+            switch (name.ToLower())
+            {
+                case "sun":
+                    SOI = 100;
+                    break;
+                case "moho":
+                    SOI = 110;
+                    break;
+                case "eve":
+                    SOI = 120;
+                    break;
+                case "gilly":
+                    SOI = 121;
+                    break;
+                case "kerbin":
+                    SOI = 130;
+                    break;
+                case "mun":
+                    SOI = 131;
+                    break;
+                case "minmus":
+                    SOI = 132;
+                    break;
+                case "duna":
+                    SOI = 140;
+                    break;
+                case "ike":
+                    SOI = 141;
+                    break;
+                case "dres":
+                    SOI = 150;
+                    break;
+                case "jool":
+                    SOI = 160;
+                    break;
+                case "laythe":
+                    SOI = 161;
+                    break;
+                case "vall":
+                    SOI = 162;
+                    break;
+                case "tylo":
+                    SOI = 163;
+                    break;
+                case "bop":
+                    SOI = 164;
+                    break;
+                case "pol":
+                    SOI = 165;
+                    break;
+                case "eeloo":
+                    SOI = 170;
+                    break;
+                default:
+                    SOI = 0;
+                    break;
+            }
+            return SOI;
         }
 
         // this recursive stage look up stuff stolen and modified from KOS and others
