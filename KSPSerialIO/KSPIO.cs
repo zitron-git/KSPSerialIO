@@ -849,6 +849,24 @@ namespace KSPSerialIO
 
                     //Debug.Log("KSPSerialIO: 5");
 
+                    Vector3d progradeVector1 = ActiveVessel.GetObtVelocity();
+                    Vector3d progradeVector2 = ActiveVessel.GetOrbit().GetVel();
+                    if (progradeVector1 == progradeVector2) {
+                        Debug.Log("Vectors equal");
+                    } else {
+                        Debug.Log("Vectors not equal");
+                    }
+                    Vector3d normalVector = swapYZ(ActiveVessel.GetOrbit().GetOrbitNormal());        
+                    Vector3d radialVector = Vector3d.Cross(progradeVector1, normalVector);
+                    double[] progradeHeading1 = getOffsetFromHeading(ActiveVessel, progradeVector1);
+                    double[] progradeHeading2 = getOffsetFromHeading(ActiveVessel, progradeVector2);
+                    double[] normalHeading = getOffsetFromHeading(ActiveVessel, normalVector);
+                    double[] radialHeading = getOffsetFromHeading(ActiveVessel, radialVector);
+                    Debug.Log(String.Format("Prograde 1 pitch, yaw: {0}, {1}", progradeHeading1[0], progradeHeading1[1]));
+                    Debug.Log(String.Format("Prograde 2 pitch, yaw: {0}, {1}", progradeHeading2[0], progradeHeading2[1]));
+                    Debug.Log(String.Format("Normal pitch, yaw: {0}, {1}", normalHeading[0], normalHeading[1]));
+                    Debug.Log(String.Format("Radial pitch, yaw: {0}, {1}", radialHeading[0], radialHeading[1]));
+
                     Quaternion attitude = updateHeadingPitchRollField(ActiveVessel);
 
                     KSPSerialPort.VData.Roll = (float)((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z);
@@ -916,7 +934,9 @@ namespace KSPSerialIO
                         "   " + KSPSerialPort.VData.LiquidFuel.ToString() + "/" + KSPSerialPort.VData.LiquidFuelTot);
                     */
                     #endregion
+
                     KSPSerialPort.sendPacket(KSPSerialPort.VData);
+
                 } //end refresh
                 #endregion
                 #region inputs
@@ -1538,6 +1558,73 @@ namespace KSPSerialIO
             return Quaternion.Inverse(Quaternion.Euler(90, 0, 0) * Quaternion.Inverse(v.GetTransform().rotation) * rotationSurface);
         }
 
+        private double[] getOffsetFromHeading(Vessel ActiveVessel, Vector3d targetVector)
+        {
+            Vector3d yawComponent = Vector3d.Exclude(ActiveVessel.GetTransform().forward, targetVector);
+            Vector3d yawCross = Vector3d.Cross(yawComponent, ActiveVessel.GetTransform().right);
+            double yaw = SignedVectorAngle(yawComponent, ActiveVessel.GetTransform().up, yawCross);
+
+            Vector3d pitchComponent = Vector3d.Exclude(ActiveVessel.GetTransform().right, targetVector);
+            Vector3d pitchCross = Vector3d.Cross(pitchComponent, ActiveVessel.GetTransform().forward);
+            double pitch = SignedVectorAngle(pitchComponent, ActiveVessel.GetTransform().up, pitchCross);
+
+            if (Math.Abs(yaw) > 90) {
+                yaw = -yaw;
+                // This condition makes sure progradePitch doesn't wrap from -x to 360-x
+                if (pitch > 0) {
+                    pitch = pitch - 180;
+                } else {
+                    pitch = pitch + 180;
+                }
+            }
+            return new double[] {pitch, yaw};
+        }
+
+        private double SignedVectorAngle(Vector3d referenceVector, Vector3d otherVector, Vector3d normal)
+        {
+            Vector3d perpVector;
+            double angle;
+            //Use the geometry object normal and one of the input vectors to calculate the perpendicular vector
+            perpVector = Vector3d.Cross(normal, referenceVector);
+            //Now calculate the dot product between the perpendicular vector (perpVector) and the other input vector
+            angle = Vector3d.Angle(referenceVector, otherVector);
+            angle *= Math.Sign(Vector3d.Dot(perpVector, otherVector));
+
+            return angle;
+        }
+
+        private Vector3d swapYZ(Vector3d v)
+        {
+            return new Vector3d(v.x, v.z, v.y);
+        }
+
+        private Orbit fetchFarOrbit(Vessel v)
+        {
+            Orbit prevOrbit = null;
+            Orbit curOrbit = v.orbit;
+            Orbit nextOrbit = curOrbit.nextPatch;
+            while (nextOrbit != null && nextOrbit.activePatch)
+            {
+                //if (prevOrbit != null && prevOrbit.referenceBody.name.Equals(nextOrbit.referenceBody.name, StringComparison.Ordinal))
+                if (prevOrbit != null && ReferenceEquals(prevOrbit.referenceBody, nextOrbit.referenceBody))
+                {
+                    break;
+                } else
+                {
+                    prevOrbit = curOrbit;
+                    curOrbit = nextOrbit;
+                    nextOrbit = curOrbit.nextPatch;
+                }
+            }
+
+            if (prevOrbit == null)
+            {
+                return null;
+            } else
+            {
+                return curOrbit;
+            }
+        }
         #endregion
 
         void FixedUpdate()
