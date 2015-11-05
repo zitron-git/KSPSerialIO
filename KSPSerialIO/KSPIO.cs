@@ -1597,34 +1597,6 @@ namespace KSPSerialIO
         {
             return new Vector3d(v.x, v.z, v.y);
         }
-
-        private Orbit fetchFarOrbit(Vessel v)
-        {
-            Orbit prevOrbit = null;
-            Orbit curOrbit = v.orbit;
-            Orbit nextOrbit = curOrbit.nextPatch;
-            while (nextOrbit != null && nextOrbit.activePatch)
-            {
-                //if (prevOrbit != null && prevOrbit.referenceBody.name.Equals(nextOrbit.referenceBody.name, StringComparison.Ordinal))
-                if (prevOrbit != null && ReferenceEquals(prevOrbit.referenceBody, nextOrbit.referenceBody))
-                {
-                    break;
-                } else
-                {
-                    prevOrbit = curOrbit;
-                    curOrbit = nextOrbit;
-                    nextOrbit = curOrbit.nextPatch;
-                }
-            }
-
-            if (prevOrbit == null)
-            {
-                return null;
-            } else
-            {
-                return curOrbit;
-            }
-        }
         #endregion
 
         void FixedUpdate()
