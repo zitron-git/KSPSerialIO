@@ -69,6 +69,18 @@ namespace KSPSerialIO
         public float IAS;           //50  Indicated Air Speed
         public byte CurrentStage;   //51  Current stage number
         public byte TotalStage;     //52  TotalNumber of stages
+        public float ProgradePitch; //53 Direction of orbital prograde,
+        public float ProgradeHeading;//54 relative to vessel attitude
+        public float NormalPitch;   //55 Direction of orbit normal,
+        public float NormalHeading; //56 relative to vessel attitude
+        public float RadialPitch;   //57 Direction of orbit radial,
+        public float RadialHeading; //58 relative to vessel attitude
+        public float ProgradeSPitch; //59 Direction of surface prograde,
+        public float ProgradeSHeading;//60 relative to vessel attitude
+        public float TargetPitch; //61 Direction of target prograde
+        public float TargetHeading; //62 relative to vessel attitude
+        public float ManeuverPitch; //63 Direction of maneuver
+        public float ManeuverHeading; //64 relative to vessel attitude
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
