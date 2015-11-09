@@ -855,35 +855,47 @@ namespace KSPSerialIO
                             {
                                 KSPSerialPort.VData.MNTime = (UInt32)Math.Round(ActiveVessel.patchedConicSolver.maneuverNodes[0].UT - Planetarium.GetUniversalTime());
                                 KSPSerialPort.VData.MNDeltaV = (float)ActiveVessel.patchedConicSolver.maneuverNodes[0].DeltaV.magnitude;
+
+                                Vector3 maneuverVector = ActiveVessel.patchedConicSolver.maneuverNodes[0].GetBurnVector(ActiveVessel.orbit).normalized;
+                                double[] maneuverRelativeHeading = getOffsetFromHeading(ActiveVessel, maneuverVector);
+                                KSPSerialPort.VData.ManeuverPitch = (float)maneuverRelativeHeading[0];
+                                KSPSerialPort.VData.ManeuverHeading = (float)maneuverRelativeHeading[1];
                             }
                         }
                     }
 
-                    //Debug.Log("KSPSerialIO: 5");
-
-                    Vector3d progradeVector1 = ActiveVessel.GetObtVelocity();
-                    Vector3d progradeVector2 = ActiveVessel.GetOrbit().GetVel();
-                    if (progradeVector1 == progradeVector2) {
-                        Debug.Log("Vectors equal");
-                    } else {
-                        Debug.Log("Vectors not equal");
+                    Vessel targetVessel = FlightGlobals.fetch.VesselTarget.GetVessel();
+                    if (targetVessel != null)
+                    {
+                        Vector3 targetVector = (targetVessel.GetWorldPos3D() - ActiveVessel.GetWorldPos3D()).normalized;
+                        double[] targetRelativeHeading = getOffsetFromHeading(ActiveVessel, targetVector);
+                        KSPSerialPort.VData.TargetPitch = (float)targetRelativeHeading[0];
+                        KSPSerialPort.VData.TargetHeading = (float)targetRelativeHeading[1];
                     }
-                    Vector3d normalVector = swapYZ(ActiveVessel.GetOrbit().GetOrbitNormal());        
-                    Vector3d radialVector = Vector3d.Cross(progradeVector1, normalVector);
-                    double[] progradeHeading1 = getOffsetFromHeading(ActiveVessel, progradeVector1);
-                    double[] progradeHeading2 = getOffsetFromHeading(ActiveVessel, progradeVector2);
-                    double[] normalHeading = getOffsetFromHeading(ActiveVessel, normalVector);
-                    double[] radialHeading = getOffsetFromHeading(ActiveVessel, radialVector);
-                    Debug.Log(String.Format("Prograde 1 pitch, yaw: {0}, {1}", progradeHeading1[0], progradeHeading1[1]));
-                    Debug.Log(String.Format("Prograde 2 pitch, yaw: {0}, {1}", progradeHeading2[0], progradeHeading2[1]));
-                    Debug.Log(String.Format("Normal pitch, yaw: {0}, {1}", normalHeading[0], normalHeading[1]));
-                    Debug.Log(String.Format("Radial pitch, yaw: {0}, {1}", radialHeading[0], radialHeading[1]));
 
+                    //Debug.Log("KSPSerialIO: 5");
                     Quaternion attitude = updateHeadingPitchRollField(ActiveVessel);
 
                     KSPSerialPort.VData.Roll = (float)((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z);
                     KSPSerialPort.VData.Pitch = (float)((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x);
                     KSPSerialPort.VData.Heading = (float)attitude.eulerAngles.y;
+
+                    Vector3 progradeVector = ActiveVessel.GetObtVelocity().normalized;
+                    Vector3 normalVector = swapYZ(ActiveVessel.GetOrbit().GetOrbitNormal()).normalized;
+                    Vector3 radialVector = Vector3.Cross(progradeVector, normalVector).normalized;
+                    Vector3 progradeSVector = ActiveVessel.GetSrfVelocity().normalized;
+                    double[] progradeHeading = getOffsetFromHeading(ActiveVessel, progradeVector);
+                    double[] normalHeading = getOffsetFromHeading(ActiveVessel, normalVector);
+                    double[] radialHeading = getOffsetFromHeading(ActiveVessel, radialVector);
+                    double[] progradeSHeading = getOffsetFromHeading(ActiveVessel, progradeSVector);
+                    KSPSerialPort.VData.ProgradePitch = (float)progradeHeading[0];
+                    KSPSerialPort.VData.ProgradeHeading = (float)progradeHeading[1];
+                    KSPSerialPort.VData.NormalPitch = (float)normalHeading[0];
+                    KSPSerialPort.VData.NormalHeading = (float)normalHeading[1];
+                    KSPSerialPort.VData.RadialPitch = (float)radialHeading[0];
+                    KSPSerialPort.VData.RadialHeading = (float)radialHeading[1];
+                    KSPSerialPort.VData.ProgradeSPitch = (float)progradeSHeading[0];
+                    KSPSerialPort.VData.ProgradeSHeading = (float)progradeSHeading[1];
 
                     KSPSerialPort.ControlStatus((int)enumAG.SAS, ActiveVessel.ActionGroups[KSPActionGroup.SAS]);
                     KSPSerialPort.ControlStatus((int)enumAG.RCS, ActiveVessel.ActionGroups[KSPActionGroup.RCS]);
