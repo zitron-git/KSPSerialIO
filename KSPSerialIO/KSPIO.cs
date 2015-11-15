@@ -62,25 +62,25 @@ namespace KSPSerialIO
         public float Pitch;         //43
         public float Roll;          //44
         public float Heading;       //45
-        public UInt16 ActionGroups; //46  status bit order:SAS, RCS, Light, Gear, Brakes, Abort, Custom01 - 10 
-        public byte SOINumber;      //47  SOI Number (decimal format: sun-planet-moon e.g. 130 = kerbin, 131 = mun)
-        public byte MaxOverHeat;    //48  Max part overheat (% percent)
-        public float MachNumber;    //49
-        public float IAS;           //50  Indicated Air Speed
-        public byte CurrentStage;   //51  Current stage number
-        public byte TotalStage;     //52  TotalNumber of stages
-        public float ProgradePitch; //53 Direction of orbital prograde,
-        public float ProgradeHeading;//54 relative to vessel attitude
-        public float NormalPitch;   //55 Direction of orbit normal,
-        public float NormalHeading; //56 relative to vessel attitude
-        public float RadialPitch;   //57 Direction of orbit radial,
-        public float RadialHeading; //58 relative to vessel attitude
-        public float ProgradeSPitch; //59 Direction of surface prograde,
-        public float ProgradeSHeading;//60 relative to vessel attitude
-        public float TargetPitch; //61 Direction of target prograde
-        public float TargetHeading; //62 relative to vessel attitude
-        public float ManeuverPitch; //63 Direction of maneuver
-        public float ManeuverHeading; //64 relative to vessel attitude
+        public float ProgradePitch; //46 Direction of orbital prograde,
+        public float ProgradeHeading;//47 relative to vessel attitude
+        public float NormalPitch;   //48 Direction of orbit normal,
+        public float NormalHeading; //49 relative to vessel attitude
+        public float RadialPitch;   //50 Direction of orbit radial,
+        public float RadialHeading; //51 relative to vessel attitude
+        public float ProgradeSPitch; //52 Direction of surface prograde,
+        public float ProgradeSHeading;//53 relative to vessel attitude
+        public float TargetPitch; //54 Direction of target prograde
+        public float TargetHeading; //55 relative to vessel attitude
+        public float ManeuverPitch; //56 Direction of maneuver
+        public float ManeuverHeading; //57 relative to vessel attitude
+        public UInt16 ActionGroups; //58  status bit order:SAS, RCS, Light, Gear, Brakes, Abort, Custom01 - 10 
+        public byte SOINumber;      //59  SOI Number (decimal format: sun-planet-moon e.g. 130 = kerbin, 131 = mun)
+        public byte MaxOverHeat;    //60  Max part overheat (% percent)
+        public float MachNumber;    //61
+        public float IAS;           //62  Indicated Air Speed
+        public byte CurrentStage;   //63  Current stage number
+        public byte TotalStage;     //64  TotalNumber of stages
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
