@@ -864,9 +864,8 @@ namespace KSPSerialIO
                         }
                     }
 
-                    Vessel targetVessel = FlightGlobals.fetch.VesselTarget.GetVessel();
-                    if (targetVessel != null)
-                    {
+                    if (FlightGlobals.fetch.VesselTarget != null) {
+                        Vessel targetVessel = FlightGlobals.fetch.VesselTarget.GetVessel();
                         Vector3 targetVector = (targetVessel.GetWorldPos3D() - ActiveVessel.GetWorldPos3D()).normalized;
                         double[] targetRelativeHeading = getOffsetFromHeading(ActiveVessel, targetVector);
                         KSPSerialPort.VData.TargetPitch = (float)targetRelativeHeading[0];
