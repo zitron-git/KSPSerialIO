@@ -59,21 +59,21 @@ namespace KSPSerialIO
         public float VOrbit;        //40
         public UInt32 MNTime;       //41
         public float MNDeltaV;      //42
-        public Int16 Pitch;         //43 All pitch roll and heading info is sent as 10.6 fixed point numbers
-        public Int16 Roll;          //44
-        public Int16 Heading;       //45
-        public Int16 ProgradePitch; //46 Direction of orbital prograde,
-        public Int16 ProgradeHeading;//47 relative to vessel attitude
-        public Int16 NormalPitch;   //48 Direction of orbit normal,
-        public Int16 NormalHeading; //49 relative to vessel attitude
-        public Int16 RadialPitch;   //50 Direction of orbit radial,
-        public Int16 RadialHeading; //51 relative to vessel attitude
-        public Int16 ProgradeSPitch; //52 Direction of surface prograde,
-        public Int16 ProgradeSHeading;//53 relative to vessel attitude
-        public Int16 TargetPitch; //54 Direction of target prograde
-        public Int16 TargetHeading; //55 relative to vessel attitude
-        public Int16 ManeuverPitch; //56 Direction of maneuver
-        public Int16 ManeuverHeading; //57 relative to vessel attitude
+        public UInt16 Pitch;         //43
+        public UInt16 Roll;          //44
+        public UInt16 Heading;       //45 Heading is always 0-360. Pitch and Roll -180 to 180.
+        public UInt16 ProgradePitch; //46 Direction of orbital prograde,
+        public UInt16 ProgradeHeading;//47 relative to vessel attitude
+        public UInt16 NormalPitch;   //48 Direction of orbit normal,
+        public UInt16 NormalHeading; //49 relative to vessel attitude
+        public UInt16 RadialPitch;   //50 Direction of orbit radial,
+        public UInt16 RadialHeading; //51 relative to vessel attitude
+        public UInt16 ProgradeSPitch; //52 Direction of surface prograde,
+        public UInt16 ProgradeSHeading;//53 relative to vessel attitude
+        public UInt16 TargetPitch; //54 Direction of target prograde
+        public UInt16 TargetHeading; //55 relative to vessel attitude
+        public UInt16 ManeuverPitch; //56 Direction of maneuver
+        public UInt16 ManeuverHeading; //57 relative to vessel attitude
         public UInt16 ActionGroups; //58  status bit order:SAS, RCS, Light, Gear, Brakes, Abort, Custom01 - 10 
         public byte SOINumber;      //59  SOI Number (decimal format: sun-planet-moon e.g. 130 = kerbin, 131 = mun)
         public byte MaxOverHeat;    //60  Max part overheat (% percent)
@@ -858,8 +858,8 @@ namespace KSPSerialIO
 
                                 Vector3 maneuverVector = ActiveVessel.patchedConicSolver.maneuverNodes[0].GetBurnVector(ActiveVessel.orbit).normalized;
                                 double[] maneuverRelativeHeading = getOffsetFromHeading(ActiveVessel, maneuverVector);
-                                KSPSerialPort.VData.ManeuverPitch = ToFixedPoint(maneuverRelativeHeading[0]);
-                                KSPSerialPort.VData.ManeuverHeading = ToFixedPoint(maneuverRelativeHeading[1]);
+                                KSPSerialPort.VData.ManeuverPitch = ToScaledUInt(maneuverRelativeHeading[0]+180);
+                                KSPSerialPort.VData.ManeuverHeading = ToScaledUInt(maneuverRelativeHeading[1]);
                             }
                         }
                     }
@@ -868,16 +868,16 @@ namespace KSPSerialIO
                         Vessel targetVessel = FlightGlobals.fetch.VesselTarget.GetVessel();
                         Vector3 targetVector = (targetVessel.GetWorldPos3D() - ActiveVessel.GetWorldPos3D()).normalized;
                         double[] targetRelativeHeading = getOffsetFromHeading(ActiveVessel, targetVector);
-                        KSPSerialPort.VData.TargetPitch = ToFixedPoint(targetRelativeHeading[0]);
-                        KSPSerialPort.VData.TargetHeading = ToFixedPoint(targetRelativeHeading[1]);
+                        KSPSerialPort.VData.TargetPitch = ToScaledUInt(targetRelativeHeading[0]+180);
+                        KSPSerialPort.VData.TargetHeading = ToScaledUInt(targetRelativeHeading[1]);
                     }
 
                     //Debug.Log("KSPSerialIO: 5");
                     Quaternion attitude = updateHeadingPitchRollField(ActiveVessel);
 
-                    KSPSerialPort.VData.Roll = ToFixedPoint(((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z));
-                    KSPSerialPort.VData.Pitch = ToFixedPoint(((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x));
-                    KSPSerialPort.VData.Heading = ToFixedPoint(attitude.eulerAngles.y);
+                    KSPSerialPort.VData.Roll = ToScaledUInt(((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z)+180);
+                    KSPSerialPort.VData.Pitch = ToScaledUInt(((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x)+180);
+                    KSPSerialPort.VData.Heading = ToScaledUInt(attitude.eulerAngles.y);
 
                     Vector3 progradeVector = ActiveVessel.GetObtVelocity().normalized;
                     Vector3 normalVector = swapYZ(ActiveVessel.GetOrbit().GetOrbitNormal()).normalized;
@@ -887,14 +887,14 @@ namespace KSPSerialIO
                     double[] normalHeading = getOffsetFromHeading(ActiveVessel, normalVector);
                     double[] radialHeading = getOffsetFromHeading(ActiveVessel, radialVector);
                     double[] progradeSHeading = getOffsetFromHeading(ActiveVessel, progradeSVector);
-                    KSPSerialPort.VData.ProgradePitch = ToFixedPoint(progradeHeading[0]);
-                    KSPSerialPort.VData.ProgradeHeading = ToFixedPoint(progradeHeading[1]);
-                    KSPSerialPort.VData.NormalPitch = ToFixedPoint(normalHeading[0]);
-                    KSPSerialPort.VData.NormalHeading = ToFixedPoint(normalHeading[1]);
-                    KSPSerialPort.VData.RadialPitch = ToFixedPoint(radialHeading[0]);
-                    KSPSerialPort.VData.RadialHeading = ToFixedPoint(radialHeading[1]);
-                    KSPSerialPort.VData.ProgradeSPitch = ToFixedPoint(progradeSHeading[0]);
-                    KSPSerialPort.VData.ProgradeSHeading = ToFixedPoint(progradeSHeading[1]);
+                    KSPSerialPort.VData.ProgradePitch = ToScaledUInt(progradeHeading[0]+180);
+                    KSPSerialPort.VData.ProgradeHeading = ToScaledUInt(progradeHeading[1]);
+                    KSPSerialPort.VData.NormalPitch = ToScaledUInt(normalHeading[0]+180);
+                    KSPSerialPort.VData.NormalHeading = ToScaledUInt(normalHeading[1]);
+                    KSPSerialPort.VData.RadialPitch = ToScaledUInt(radialHeading[0]+180);
+                    KSPSerialPort.VData.RadialHeading = ToScaledUInt(radialHeading[1]);
+                    KSPSerialPort.VData.ProgradeSPitch = ToScaledUInt(progradeSHeading[0]+180);
+                    KSPSerialPort.VData.ProgradeSHeading = ToScaledUInt(progradeSHeading[1]);
 
                     KSPSerialPort.ControlStatus((int)enumAG.SAS, ActiveVessel.ActionGroups[KSPActionGroup.SAS]);
                     KSPSerialPort.ControlStatus((int)enumAG.RCS, ActiveVessel.ActionGroups[KSPActionGroup.RCS]);
@@ -1422,9 +1422,11 @@ namespace KSPSerialIO
             return SOI;
         }
 
-        private Int16 ToFixedPoint(double x)
+        private UInt16 ToScaledUInt(double x)
         {
-            return (Int16)(x * (1 << 6));
+            UInt16 result;
+            result = (UInt16)(x * 65535 / 360);
+            return result;
         }
 
         // this recursive stage look up stuff stolen and modified from KOS and others
