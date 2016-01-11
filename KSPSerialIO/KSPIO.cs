@@ -858,7 +858,7 @@ namespace KSPSerialIO
 
                                 Vector3 maneuverVector = ActiveVessel.patchedConicSolver.maneuverNodes[0].GetBurnVector(ActiveVessel.orbit).normalized;
                                 double[] maneuverRelativeHeading = getOffsetFromHeading(ActiveVessel, maneuverVector);
-                                KSPSerialPort.VData.ManeuverPitch = ToScaledUInt(maneuverRelativeHeading[0]+180);
+                                KSPSerialPort.VData.ManeuverPitch = ToScaledUInt(maneuverRelativeHeading[0]);
                                 KSPSerialPort.VData.ManeuverHeading = ToScaledUInt(maneuverRelativeHeading[1]);
                             }
                         }
@@ -868,15 +868,15 @@ namespace KSPSerialIO
                         Vessel targetVessel = FlightGlobals.fetch.VesselTarget.GetVessel();
                         Vector3 targetVector = (targetVessel.GetWorldPos3D() - ActiveVessel.GetWorldPos3D()).normalized;
                         double[] targetRelativeHeading = getOffsetFromHeading(ActiveVessel, targetVector);
-                        KSPSerialPort.VData.TargetPitch = ToScaledUInt(targetRelativeHeading[0]+180);
+                        KSPSerialPort.VData.TargetPitch = ToScaledUInt(targetRelativeHeading[0]);
                         KSPSerialPort.VData.TargetHeading = ToScaledUInt(targetRelativeHeading[1]);
                     }
 
                     //Debug.Log("KSPSerialIO: 5");
                     Quaternion attitude = updateHeadingPitchRollField(ActiveVessel);
 
-                    KSPSerialPort.VData.Roll = ToScaledUInt(((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z)+180);
-                    KSPSerialPort.VData.Pitch = ToScaledUInt(((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x)+180);
+                    KSPSerialPort.VData.Roll = ToScaledUInt(((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z));
+                    KSPSerialPort.VData.Pitch = ToScaledUInt(((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x));
                     KSPSerialPort.VData.Heading = ToScaledUInt(attitude.eulerAngles.y);
 
                     Vector3 progradeVector = ActiveVessel.GetObtVelocity().normalized;
@@ -887,13 +887,13 @@ namespace KSPSerialIO
                     double[] normalHeading = getOffsetFromHeading(ActiveVessel, normalVector);
                     double[] radialHeading = getOffsetFromHeading(ActiveVessel, radialVector);
                     double[] progradeSHeading = getOffsetFromHeading(ActiveVessel, progradeSVector);
-                    KSPSerialPort.VData.ProgradePitch = ToScaledUInt(progradeHeading[0]+180);
+                    KSPSerialPort.VData.ProgradePitch = ToScaledUInt(progradeHeading[0]);
                     KSPSerialPort.VData.ProgradeHeading = ToScaledUInt(progradeHeading[1]);
-                    KSPSerialPort.VData.NormalPitch = ToScaledUInt(normalHeading[0]+180);
+                    KSPSerialPort.VData.NormalPitch = ToScaledUInt(normalHeading[0]);
                     KSPSerialPort.VData.NormalHeading = ToScaledUInt(normalHeading[1]);
-                    KSPSerialPort.VData.RadialPitch = ToScaledUInt(radialHeading[0]+180);
+                    KSPSerialPort.VData.RadialPitch = ToScaledUInt(radialHeading[0]);
                     KSPSerialPort.VData.RadialHeading = ToScaledUInt(radialHeading[1]);
-                    KSPSerialPort.VData.ProgradeSPitch = ToScaledUInt(progradeSHeading[0]+180);
+                    KSPSerialPort.VData.ProgradeSPitch = ToScaledUInt(progradeSHeading[0]);
                     KSPSerialPort.VData.ProgradeSHeading = ToScaledUInt(progradeSHeading[1]);
 
                     KSPSerialPort.ControlStatus((int)enumAG.SAS, ActiveVessel.ActionGroups[KSPActionGroup.SAS]);
@@ -1424,6 +1424,14 @@ namespace KSPSerialIO
 
         private UInt16 ToScaledUInt(double x)
         {
+            if (x < 0)
+            {
+                x = 360 - x;
+            }
+            else if (x > 360)
+            {
+                x = x % 360;
+            }
             UInt16 result;
             result = (UInt16)(x * 65535 / 360);
             return result;
