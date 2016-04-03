@@ -676,7 +676,7 @@ namespace KSPSerialIO
         private double theTime = 0;
 
         public double refreshrate = 1.0f;
-        public static Vessel ActiveVessel;
+        public static Vessel ActiveVessel = new Vessel();
         public Guid VesselIDOld;
 
         IOResource TempR = new IOResource();
