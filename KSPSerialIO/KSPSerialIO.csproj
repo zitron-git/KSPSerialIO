@@ -37,6 +37,9 @@
       <HintPath>..\..\..\..\..\..\..\Games\KSP_win\KSP_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="KSPUtil">
+      <HintPath>..\..\..\..\..\..\..\Games\KSP_win\KSP_Data\Managed\KSPUtil.dll</HintPath>
+    </Reference>
     <Reference Include="SerialPort">
       <HintPath>.\SerialPort.dll</HintPath>
       <EmbedInteropTypes>False</EmbedInteropTypes>
@@ -51,6 +54,9 @@
     <Reference Include="UnityEngine">
       <HintPath>..\..\..\..\..\..\..\Games\KSP_win\KSP_Data\Managed\UnityEngine.dll</HintPath>
       <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\..\..\..\..\..\..\Games\KSP_win\KSP_Data\Managed\UnityEngine.UI.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
