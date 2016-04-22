@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using OpenNETCF.IO.Ports;
 using UnityEngine;
 using KSP.IO;
+using KSP.UI.Screens;
 
 namespace KSPSerialIO
 {
@@ -355,7 +356,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.18.1");
+                Debug.Log("KSPSerialIO: Version 0.18.2");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -899,14 +900,14 @@ namespace KSPSerialIO
                     KSPSerialPort.VData.MachNumber = (float)ActiveVessel.mach;
                     KSPSerialPort.VData.IAS = (float)ActiveVessel.indicatedAirSpeed;
 
-                    KSPSerialPort.VData.CurrentStage = (byte)Staging.CurrentStage;
-                    KSPSerialPort.VData.TotalStage = (byte)Staging.StageCount;
+                    KSPSerialPort.VData.CurrentStage = (byte)StageManager.CurrentStage;
+                    KSPSerialPort.VData.TotalStage = (byte)StageManager.StageCount;
 
                     
 
                     #region debugjunk
-                    /*
                     
+                    /*
                     Debug.Log("KSPSerialIO: Stage " + KSPSerialPort.VData.CurrentStage.ToString() + ' ' +
                         KSPSerialPort.VData.TotalStage.ToString()); 
                     Debug.Log("KSPSerialIO: Overheat " + KSPSerialPort.VData.MaxOverHeat.ToString());
@@ -1006,7 +1007,7 @@ namespace KSPSerialIO
                     if (KSPSerialPort.VControls.Stage != KSPSerialPort.VControlsOld.Stage)
                     {
                         if (KSPSerialPort.VControls.Stage)
-                            Staging.ActivateNextStage();
+                            StageManager.ActivateNextStage();
 
                         ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Stage, KSPSerialPort.VControls.Stage);
                         KSPSerialPort.VControlsOld.Stage = KSPSerialPort.VControls.Stage;
