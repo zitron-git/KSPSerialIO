@@ -60,16 +60,28 @@ namespace KSPSerialIO
         public float VOrbit;        //40
         public UInt32 MNTime;       //41
         public float MNDeltaV;      //42
-        public float Pitch;         //43
-        public float Roll;          //44
-        public float Heading;       //45
-        public UInt16 ActionGroups; //46  status bit order:SAS, RCS, Light, Gear, Brakes, Abort, Custom01 - 10 
-        public byte SOINumber;      //47  SOI Number (decimal format: sun-planet-moon e.g. 130 = kerbin, 131 = mun)
-        public byte MaxOverHeat;    //48  Max part overheat (% percent)
-        public float MachNumber;    //49
-        public float IAS;           //50  Indicated Air Speed
-        public byte CurrentStage;   //51  Current stage number
-        public byte TotalStage;     //52  TotalNumber of stages
+        public UInt16 Pitch;         //43
+        public UInt16 Roll;          //44
+        public UInt16 Heading;       //45 Heading is always 0-360. Pitch and Roll -180 to 180.
+        public UInt16 ProgradePitch; //46 Direction of orbital prograde,
+        public UInt16 ProgradeHeading;//47 relative to vessel attitude
+        public UInt16 NormalPitch;   //48 Direction of orbit normal,
+        public UInt16 NormalHeading; //49 relative to vessel attitude
+        public UInt16 RadialPitch;   //50 Direction of orbit radial,
+        public UInt16 RadialHeading; //51 relative to vessel attitude
+        public UInt16 ProgradeSPitch; //52 Direction of surface prograde,
+        public UInt16 ProgradeSHeading;//53 relative to vessel attitude
+        public UInt16 TargetPitch; //54 Direction of target prograde
+        public UInt16 TargetHeading; //55 relative to vessel attitude
+        public UInt16 ManeuverPitch; //56 Direction of maneuver
+        public UInt16 ManeuverHeading; //57 relative to vessel attitude
+        public UInt16 ActionGroups; //58  status bit order:SAS, RCS, Light, Gear, Brakes, Abort, Custom01 - 10 
+        public byte SOINumber;      //59  SOI Number (decimal format: sun-planet-moon e.g. 130 = kerbin, 131 = mun)
+        public byte MaxOverHeat;    //60  Max part overheat (% percent)
+        public float MachNumber;    //61
+        public float IAS;           //62  Indicated Air Speed
+        public byte CurrentStage;   //63  Current stage number
+        public byte TotalStage;     //64  TotalNumber of stages
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -865,17 +877,46 @@ namespace KSPSerialIO
                             {
                                 KSPSerialPort.VData.MNTime = (UInt32)Math.Round(ActiveVessel.patchedConicSolver.maneuverNodes[0].UT - Planetarium.GetUniversalTime());
                                 KSPSerialPort.VData.MNDeltaV = (float)ActiveVessel.patchedConicSolver.maneuverNodes[0].DeltaV.magnitude;
+
+                                Vector3 maneuverVector = ActiveVessel.patchedConicSolver.maneuverNodes[0].GetBurnVector(ActiveVessel.orbit).normalized;
+                                double[] maneuverRelativeHeading = getOffsetFromHeading(ActiveVessel, maneuverVector);
+                                KSPSerialPort.VData.ManeuverPitch = ToScaledUInt(maneuverRelativeHeading[0]);
+                                KSPSerialPort.VData.ManeuverHeading = ToScaledUInt(maneuverRelativeHeading[1]);
                             }
                         }
                     }
 
-                    //Debug.Log("KSPSerialIO: 5");
+                    if (FlightGlobals.fetch.VesselTarget != null) {
+                        Vessel targetVessel = FlightGlobals.fetch.VesselTarget.GetVessel();
+                        Vector3 targetVector = (targetVessel.GetWorldPos3D() - ActiveVessel.GetWorldPos3D()).normalized;
+                        double[] targetRelativeHeading = getOffsetFromHeading(ActiveVessel, targetVector);
+                        KSPSerialPort.VData.TargetPitch = ToScaledUInt(targetRelativeHeading[0]);
+                        KSPSerialPort.VData.TargetHeading = ToScaledUInt(targetRelativeHeading[1]);
+                    }
 
+                    //Debug.Log("KSPSerialIO: 5");
                     Quaternion attitude = updateHeadingPitchRollField(ActiveVessel);
 
-                    KSPSerialPort.VData.Roll = (float)((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z);
-                    KSPSerialPort.VData.Pitch = (float)((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x);
-                    KSPSerialPort.VData.Heading = (float)attitude.eulerAngles.y;
+                    KSPSerialPort.VData.Roll = ToScaledUInt(((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z));
+                    KSPSerialPort.VData.Pitch = ToScaledUInt(((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x));
+                    KSPSerialPort.VData.Heading = ToScaledUInt(attitude.eulerAngles.y);
+
+                    Vector3 progradeVector = ActiveVessel.GetObtVelocity().normalized;
+                    Vector3 normalVector = swapYZ(ActiveVessel.GetOrbit().GetOrbitNormal()).normalized;
+                    Vector3 radialVector = Vector3.Cross(progradeVector, normalVector).normalized;
+                    Vector3 progradeSVector = ActiveVessel.GetSrfVelocity().normalized;
+                    double[] progradeHeading = getOffsetFromHeading(ActiveVessel, progradeVector);
+                    double[] normalHeading = getOffsetFromHeading(ActiveVessel, normalVector);
+                    double[] radialHeading = getOffsetFromHeading(ActiveVessel, radialVector);
+                    double[] progradeSHeading = getOffsetFromHeading(ActiveVessel, progradeSVector);
+                    KSPSerialPort.VData.ProgradePitch = ToScaledUInt(progradeHeading[0]);
+                    KSPSerialPort.VData.ProgradeHeading = ToScaledUInt(progradeHeading[1]);
+                    KSPSerialPort.VData.NormalPitch = ToScaledUInt(normalHeading[0]);
+                    KSPSerialPort.VData.NormalHeading = ToScaledUInt(normalHeading[1]);
+                    KSPSerialPort.VData.RadialPitch = ToScaledUInt(radialHeading[0]);
+                    KSPSerialPort.VData.RadialHeading = ToScaledUInt(radialHeading[1]);
+                    KSPSerialPort.VData.ProgradeSPitch = ToScaledUInt(progradeSHeading[0]);
+                    KSPSerialPort.VData.ProgradeSHeading = ToScaledUInt(progradeSHeading[1]);
 
                     KSPSerialPort.ControlStatus((int)enumAG.SAS, ActiveVessel.ActionGroups[KSPActionGroup.SAS]);
                     KSPSerialPort.ControlStatus((int)enumAG.RCS, ActiveVessel.ActionGroups[KSPActionGroup.RCS]);
@@ -938,7 +979,9 @@ namespace KSPSerialIO
                         "   " + KSPSerialPort.VData.LiquidFuel.ToString() + "/" + KSPSerialPort.VData.LiquidFuelTot);
                     */
                     #endregion
+
                     KSPSerialPort.sendPacket(KSPSerialPort.VData);
+
                 } //end refresh
                 #endregion
                 #region inputs
@@ -1407,6 +1450,21 @@ namespace KSPSerialIO
             return SOI;
         }
 
+        private UInt16 ToScaledUInt(double x)
+        {
+            if (x < 0)
+            {
+                x = x + 360;
+            }
+            else if (x > 360)
+            {
+                x = x % 360;
+            }
+            UInt16 result;
+            result = (UInt16)(x * 65535 / 360);
+            return result;
+        }
+
         // this recursive stage look up stuff stolen and modified from KOS and others
         public static List<Part> GetListOfActivatedEngines(Vessel vessel)
         {
@@ -1566,6 +1624,45 @@ namespace KSPSerialIO
             return Quaternion.Inverse(Quaternion.Euler(90, 0, 0) * Quaternion.Inverse(v.GetTransform().rotation) * rotationSurface);
         }
 
+        private double[] getOffsetFromHeading(Vessel ActiveVessel, Vector3d targetVector)
+        {
+            Vector3d yawComponent = Vector3d.Exclude(ActiveVessel.GetTransform().forward, targetVector);
+            Vector3d yawCross = Vector3d.Cross(yawComponent, ActiveVessel.GetTransform().right);
+            double yaw = SignedVectorAngle(yawComponent, ActiveVessel.GetTransform().up, yawCross);
+
+            Vector3d pitchComponent = Vector3d.Exclude(ActiveVessel.GetTransform().right, targetVector);
+            Vector3d pitchCross = Vector3d.Cross(pitchComponent, ActiveVessel.GetTransform().forward);
+            double pitch = SignedVectorAngle(pitchComponent, ActiveVessel.GetTransform().up, pitchCross);
+
+            if (Math.Abs(yaw) > 90) {
+                yaw = -yaw;
+                // This condition makes sure progradePitch doesn't wrap from -x to 360-x
+                if (pitch > 0) {
+                    pitch = pitch - 180;
+                } else {
+                    pitch = pitch + 180;
+                }
+            }
+            return new double[] {pitch, yaw};
+        }
+
+        private double SignedVectorAngle(Vector3d referenceVector, Vector3d otherVector, Vector3d normal)
+        {
+            Vector3d perpVector;
+            double angle;
+            //Use the geometry object normal and one of the input vectors to calculate the perpendicular vector
+            perpVector = Vector3d.Cross(normal, referenceVector);
+            //Now calculate the dot product between the perpendicular vector (perpVector) and the other input vector
+            angle = Vector3d.Angle(referenceVector, otherVector);
+            angle *= Math.Sign(Vector3d.Dot(perpVector, otherVector));
+
+            return angle;
+        }
+
+        private Vector3d swapYZ(Vector3d v)
+        {
+            return new Vector3d(v.x, v.z, v.y);
+        }
         #endregion
 
         void FixedUpdate()
