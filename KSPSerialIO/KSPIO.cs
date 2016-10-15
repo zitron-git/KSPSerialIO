@@ -252,7 +252,7 @@ namespace KSPSerialIO
         private static byte rx_len;
         private static byte rx_array_inx;
         private static int structSize;
-        private static byte id = 255;
+        private static byte id = 255;        
 
         private const byte HSPid = 0, VDid = 1, Cid = 101; //hard coded values for packet IDS
 
@@ -356,7 +356,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.18.2");
+                Debug.Log("KSPSerialIO: Version 0.18.3");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -681,6 +681,8 @@ namespace KSPSerialIO
         public Guid VesselIDOld;
 
         IOResource TempR = new IOResource();
+
+        private static Boolean wasSASOn = false;
 
         private ScreenMessageStyle KSPIOScreenStyle = ScreenMessageStyle.UPPER_RIGHT;
 
@@ -1075,27 +1077,52 @@ namespace KSPSerialIO
                         KSPSerialPort.VControlsOld.ControlGroup[10] = KSPSerialPort.VControls.ControlGroup[10];
                     }
 
+                                        
+                    
                     if (Math.Abs(KSPSerialPort.VControls.Pitch) > SettingsNStuff.SASTol ||
                         Math.Abs(KSPSerialPort.VControls.Roll) > SettingsNStuff.SASTol ||
                         Math.Abs(KSPSerialPort.VControls.Yaw) > SettingsNStuff.SASTol)
                     {
-                        ActiveVessel.Autopilot.SAS.ManualOverride(true);
+                        //ActiveVessel.Autopilot.SAS.ManualOverride(true); 
 
-                        ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
+                        if ((ActiveVessel.Autopilot.SAS.lockedMode == true) && (wasSASOn == false))
+                        {
+                            wasSASOn = true;
+                        }
+                        else if (wasSASOn != true)
+                        {
+                            wasSASOn = false;
+                        }
 
+                        if (wasSASOn == true)
+                        {
+                            ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, false);  
+                            //ActiveVessel.Autopilot.SAS.lockedMode = false;
+                            //ActiveVessel.Autopilot.SAS.dampingMode = true;
+                        }
+                        /*                                              
+                        
                         if (KSPSerialPort.VControls.SAS == true)
                         {
                             KSPSerialPort.VControls.SAS = false;
                             KSPSerialPort.VControlsOld.SAS = false;
                         }
+                         */
                         //KSPSerialPort.VControlsOld.Pitch = KSPSerialPort.VControls.Pitch;
                         //KSPSerialPort.VControlsOld.Roll = KSPSerialPort.VControls.Roll;
                         //KSPSerialPort.VControlsOld.Yaw = KSPSerialPort.VControls.Yaw;
                     }
                     else
                     {
-                        ActiveVessel.Autopilot.SAS.ManualOverride(false);
+                        if (wasSASOn == true)
+                        {
+                            wasSASOn = false;
+                            ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, true);  
+                            //ActiveVessel.Autopilot.SAS.lockedMode = true;
+                            //ActiveVessel.Autopilot.SAS.dampingMode = false;
+                        }
                     }
+                    
                     KSPSerialPort.ControlReceived = false;
                 } //end ControlReceived
                 #endregion
@@ -1201,15 +1228,15 @@ namespace KSPSerialIO
 			switch (SettingsNStuff.PitchEnable)
 			{
 			case 1:
-				s.pitch = KSPSerialPort.VControls.Pitch;
+                    s.pitch = KSPSerialPort.VControls.Pitch;
 				break;
 			case 2:
-				if (s.pitch == 0)
-					s.pitch = KSPSerialPort.VControls.Pitch;
+                if (s.pitch == 0)
+                    s.pitch = KSPSerialPort.VControls.Pitch;
 				break;
 			case 3:
 				if (KSPSerialPort.VControls.Pitch != 0)
-					s.pitch = KSPSerialPort.VControls.Pitch;
+                    s.pitch = KSPSerialPort.VControls.Pitch;
 				break;
 			default:
 				break;
@@ -1218,15 +1245,15 @@ namespace KSPSerialIO
 			switch (SettingsNStuff.RollEnable)
 			{
 			case 1:
-				s.roll = KSPSerialPort.VControls.Roll;
+                    s.roll = KSPSerialPort.VControls.Roll;
 				break;
 			case 2:
-				if (s.roll == 0)
-					s.roll = KSPSerialPort.VControls.Roll;
+                if (s.roll == 0)
+                    s.roll = KSPSerialPort.VControls.Roll;
 				break;
 			case 3:
 				if (KSPSerialPort.VControls.Roll != 0)
-					s.roll = KSPSerialPort.VControls.Roll;
+                    s.roll = KSPSerialPort.VControls.Roll;
 				break;
 			default:
 				break;
@@ -1235,20 +1262,24 @@ namespace KSPSerialIO
 			switch (SettingsNStuff.YawEnable)
 			{
 			case 1:
-				s.yaw = KSPSerialPort.VControls.Yaw;
+                    s.yaw = KSPSerialPort.VControls.Yaw;
 				break;
 			case 2:
-				if (s.yaw == 0)
-					s.yaw = KSPSerialPort.VControls.Yaw;
+                if (s.yaw == 0)
+                    s.yaw = KSPSerialPort.VControls.Yaw;
 				break;
 			case 3:
 				if (KSPSerialPort.VControls.Yaw != 0)
-					s.yaw = KSPSerialPort.VControls.Yaw;
+                    s.yaw = KSPSerialPort.VControls.Yaw;
 				break;
 			default:
 				break;
 			}
-
+            /*
+            if (ActiveVessel.Autopilot.SAS.lockedMode == true)
+            {
+            }
+            */
 			switch (SettingsNStuff.TXEnable)
 			{
 			case 1:
@@ -1559,7 +1590,7 @@ namespace KSPSerialIO
         {
             Vector3d CoM, north, up;
             Quaternion rotationSurface;
-            CoM = v.findWorldCenterOfMass();
+            CoM = v.CoM;
             up = (CoM - v.mainBody.position).normalized;
             north = Vector3d.Exclude(up, (v.mainBody.position + v.mainBody.transform.up * (float)v.mainBody.Radius) - CoM).normalized;
             rotationSurface = Quaternion.LookRotation(north, up);
