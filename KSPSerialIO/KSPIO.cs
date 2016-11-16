@@ -71,6 +71,7 @@ namespace KSPSerialIO
         public byte CurrentStage;   //51  Current stage number
         public byte TotalStage;     //52  TotalNumber of stages
         public byte AutoPilotVector;//53  The 4 LSBs indicate the vector for the autopilot (1=SAS 2=Prograde etc, 9=Manuever node, 0 if SAS is off) The 4 MSBs are reserved so far :)
+        test
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
