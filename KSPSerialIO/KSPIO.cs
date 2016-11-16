@@ -70,8 +70,10 @@ namespace KSPSerialIO
         public float IAS;           //50  Indicated Air Speed
         public byte CurrentStage;   //51  Current stage number
         public byte TotalStage;     //52  TotalNumber of stages
-        public byte AutoPilotVector;//53  The 4 LSBs indicate the vector for the autopilot (1=SAS 2=Prograde etc, 9=Manuever node, 0 if SAS is off) The 4 MSBs are reserved so far :)
-        test
+        public byte AdditionalDataByte1;//53  First four bits indicate AutoPilot mode:
+	     						// 0 SAS is off  //1 = Regular Stability Assist //2 = Prograde
+	    						//3 = RetroGrade //4 = Normal //5 = Antinormal //6 = Radial In
+	    						//7 = Radial Out //8 = Target //9 = Anti-Target //10 = Maneuver node
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -90,7 +92,7 @@ namespace KSPSerialIO
         public byte MainControls;                  //SAS RCS Lights Gear Brakes Precision Abort Stage 
         public byte Mode;                          //0 = stage, 1 = docking, 2 = map
         public ushort ControlGroup;                //control groups 1-10 in 2 bytes
-        public byte AdditionalControlByte1;        //other stuff
+        public byte AdditionalControlByte1;        //First four bits set the AutoPilot mode (See above for AutoPilot modes)(Ignored if the equal to zero or out of bounds (>10))
         public byte AdditionalControlByte2;
         public short Pitch;                        //-1000 -> 1000
         public short Roll;                         //-1000 -> 1000
@@ -101,8 +103,7 @@ namespace KSPSerialIO
         public short WheelSteer;                   //-1000 -> 1000
         public short Throttle;                     // 0 -> 1000
         public short WheelThrottle;                // 0 -> 1000
-        public byte AutoPilotVector;               // Sets the AutoPilot mode (1=SAS 2=Prograde etc, 9=Manuever node, etc). Ignores if zero
-    };
+     };
 
     public struct VesselControls
     {
@@ -908,14 +909,14 @@ namespace KSPSerialIO
                     KSPSerialPort.VData.CurrentStage = (byte)StageManager.CurrentStage;
                     KSPSerialPort.VData.TotalStage = (byte)StageManager.StageCount;
 
-                    byte AutoPilotVectorOut = 0;
+                    byte AdditionalDataByte1Out = 0;
                     if (ActiveVessel.ActionGroups[KSPActionGroup.SAS])
                     {
-                        AutoPilotVectorOut = (byte)(FlightGlobals.ActiveVessel.Autopilot.Mode + 1);
+                        AdditionalDataByte1Out = (byte)(FlightGlobals.ActiveVessel.Autopilot.Mode + 1);
                     }
-                    //aditianal oporation will be porformed to AutoPilotVectorOut here (to pack another 4 bits of data inside)
-                    KSPSerialPort.VData.AutoPilotVector = AutoPilotVectorOut;
-                    //print("to uno: " + AutoPilotVectorOut);
+                    //aditianal oporation will be porformed to AdditionalDataByte1Out here (to pack another 4 bits of data inside)
+                    KSPSerialPort.VData.AdditionalDataByte1 = AdditionalDataByte1Out;
+                    //print("to uno: " + AdditionalDataByte1Out);
 
                     #region debugjunk
                     
@@ -1088,8 +1089,8 @@ namespace KSPSerialIO
                     }
 
                     //Set sas mode
-                    int vectorRecievedFromUno = (KSPSerialPort.CPacket.AutoPilotVector & 15);
-                    if (vectorRecievedFromUno != 0 && vectorRecievedFromUno<10) {
+                    int vectorRecievedFromUno = (KSPSerialPort.CPacket.AdditionalControlByte1 & 15);
+                    if (vectorRecievedFromUno != 0 && vectorRecievedFromUno < 11) {
                         //print("new autopilot mode not zero: "+ vectorRecievedFromUno);
                         if (!ActiveVessel.Autopilot.CanSetMode((VesselAutopilot.AutopilotMode)vectorRecievedFromUno - 1)) { print("mode not avalible"); }
                         ActiveVessel.Autopilot.SetMode((VesselAutopilot.AutopilotMode)vectorRecievedFromUno - 1);
