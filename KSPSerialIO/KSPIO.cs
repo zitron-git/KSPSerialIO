@@ -72,7 +72,7 @@ namespace KSPSerialIO
         public byte TotalStage;     //52  TotalNumber of stages
         public float TargetDist;    //53  Distance to targeted vessel (m)
         public float TargetV;       //54  Target vessel relative velocity (m/s)
-        public byte AdditionalDataByte1;//55  First four bits indicate AutoPilot mode:
+        public byte SASMode;        //55  First four bits indicate AutoPilot mode:
       						            // 0 SAS is off  //1 = Regular Stability Assist //2 = Prograde
  	    					        	//3 = RetroGrade //4 = Normal //5 = Antinormal //6 = Radial In
      					            	//7 = Radial Out //8 = Target //9 = Anti-Target //10 = Maneuver node
@@ -94,7 +94,7 @@ namespace KSPSerialIO
         public byte MainControls;                  //SAS RCS Lights Gear Brakes Precision Abort Stage 
         public byte Mode;                          //0 = stage, 1 = docking, 2 = map
         public ushort ControlGroup;                //control groups 1-10 in 2 bytes
-        public byte AdditionalControlByte1;        //First four bits set the AutoPilot mode (See above for AutoPilot modes)(Ignored if the equal to zero or out of bounds (>10))
+        public byte SASMode;                       //AutoPilot mode (See above for AutoPilot modes)(Ignored if the equal to zero or out of bounds (>10))
         public byte AdditionalControlByte2;
         public short Pitch;                        //-1000 -> 1000
         public short Roll;                         //-1000 -> 1000
@@ -118,6 +118,7 @@ namespace KSPSerialIO
         public Boolean Abort;
         public Boolean Stage;
         public int Mode;
+        public int SASMode;
         public Boolean[] ControlGroup;
         public float Pitch;
         public float Roll;
@@ -362,7 +363,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.18.4a");
+                Debug.Log("KSPSerialIO: Version 0.18.5");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -623,6 +624,7 @@ namespace KSPSerialIO
             VControls.WheelSteer = (float)CPacket.WheelSteer / 1000.0F;
             VControls.Throttle = (float)CPacket.Throttle / 1000.0F;
             VControls.WheelThrottle = (float)CPacket.WheelThrottle / 1000.0F;
+            VControls.SASMode = (int)CPacket.SASMode;
 
             for (int j = 1; j <= 10; j++)
             {
@@ -930,13 +932,10 @@ namespace KSPSerialIO
                         }
                     }
 
-                    byte AdditionalDataByte1Out = 0;
                     if (ActiveVessel.ActionGroups[KSPActionGroup.SAS])
                     {
-                        AdditionalDataByte1Out = (byte)(FlightGlobals.ActiveVessel.Autopilot.Mode + 1);
+                        KSPSerialPort.VData.SASMode = (byte)(FlightGlobals.ActiveVessel.Autopilot.Mode + 1);
                     }
-                    //aditianal oporation will be porformed to AdditionalDataByte1Out here (to pack another 4 bits of data inside)
-                    KSPSerialPort.VData.AdditionalDataByte1 = AdditionalDataByte1Out;
 
                     #region debugjunk
 
@@ -1112,17 +1111,23 @@ namespace KSPSerialIO
                     }
 
                     //Set sas mode
-                    int vectorRecievedFromUno = (KSPSerialPort.CPacket.AdditionalControlByte1 & 15);
-                    if (vectorRecievedFromUno != 0 && vectorRecievedFromUno < 11)
+                    if (KSPSerialPort.VControls.SASMode != KSPSerialPort.VControlsOld.SASMode)
                     {
-                        //print("new autopilot mode not zero: "+ vectorRecievedFromUno);
-                        if (!ActiveVessel.Autopilot.CanSetMode((VesselAutopilot.AutopilotMode)vectorRecievedFromUno - 1)) { print("mode not avalible"); }
-                        ActiveVessel.Autopilot.SetMode((VesselAutopilot.AutopilotMode)vectorRecievedFromUno - 1);
+                        if (KSPSerialPort.VControls.SASMode != 0 && KSPSerialPort.VControls.SASMode < 11)
+                        {                            
+                            if (!ActiveVessel.Autopilot.CanSetMode((VesselAutopilot.AutopilotMode)(KSPSerialPort.VControls.SASMode - 1)))
+                            {
+                                ScreenMessages.PostScreenMessage("KSPSerialIO: SAS mode " + KSPSerialPort.VControls.SASMode.ToString() + " not avalible");
+                            }
+                            else
+                            {
+                                ActiveVessel.Autopilot.SetMode((VesselAutopilot.AutopilotMode)KSPSerialPort.VControls.SASMode - 1);
+                            }
+                        }
+                        KSPSerialPort.VControlsOld.SASMode = KSPSerialPort.VControls.SASMode;
                     }
-                    else
-                    {
-                        //print(vectorRecievedFromUno);
-                    }
+
+
 
                     if (Math.Abs(KSPSerialPort.VControls.Pitch) > SettingsNStuff.SASTol ||
                         Math.Abs(KSPSerialPort.VControls.Roll) > SettingsNStuff.SASTol ||
