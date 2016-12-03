@@ -73,11 +73,12 @@ namespace KSPSerialIO
         public byte TotalStage;     //52  TotalNumber of stages
         public float TargetDist;    //53  Distance to targeted vessel (m)
         public float TargetV;       //54  Target vessel relative velocity (m/s)
-        public byte SASMode;        //55  First four bits indicate AutoPilot mode:
-                                    // 0 SAS is off  //1 = Regular Stability Assist //2 = Prograde
-                                    //3 = RetroGrade //4 = Normal //5 = Antinormal //6 = Radial In
-                                    //7 = Radial Out //8 = Target //9 = Anti-Target //10 = Maneuver node
-                                    //Last 4 bits set navball mode. (0=ignore,1=ORBIT,2=SURFACE,3=TARGET)
+        public byte NavballSASMode; //55  Combined byte for navball target mode and SAS mode
+        // First four bits indicate AutoPilot mode:
+        // 0 SAS is off  //1 = Regular Stability Assist //2 = Prograde
+        // 3 = RetroGrade //4 = Normal //5 = Antinormal //6 = Radial In
+        // 7 = Radial Out //8 = Target //9 = Anti-Target //10 = Maneuver node
+        // Last 4 bits set navball mode. (0=ignore,1=ORBIT,2=SURFACE,3=TARGET)
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -96,7 +97,7 @@ namespace KSPSerialIO
         public byte MainControls;                  //SAS RCS Lights Gear Brakes Precision Abort Stage 
         public byte Mode;                          //0 = stage, 1 = docking, 2 = map
         public ushort ControlGroup;                //control groups 1-10 in 2 bytes
-        public byte SASMode;                       //AutoPilot mode (See above for AutoPilot modes)(Ignored if the equal to zero or out of bounds (>10)) //Navball mode
+        public byte NavballSASMode;                       //AutoPilot mode (See above for AutoPilot modes)(Ignored if the equal to zero or out of bounds (>10)) //Navball mode
         public byte AdditionalControlByte1;
         public short Pitch;                        //-1000 -> 1000
         public short Roll;                         //-1000 -> 1000
@@ -366,7 +367,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.18.5");
+                Debug.Log("KSPSerialIO: Version 0.18.6");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -627,8 +628,8 @@ namespace KSPSerialIO
             VControls.WheelSteer = (float)CPacket.WheelSteer / 1000.0F;
             VControls.Throttle = (float)CPacket.Throttle / 1000.0F;
             VControls.WheelThrottle = (float)CPacket.WheelThrottle / 1000.0F;
-            VControls.SASMode = (int)CPacket.SASMode & 0x0F;
-            VControls.SpeedMode = (int)(CPacket.SASMode  >> 4);
+            VControls.SASMode = (int)CPacket.NavballSASMode & 0x0F;
+            VControls.SpeedMode = (int)(CPacket.NavballSASMode >> 4);
 
             for (int j = 1; j <= 10; j++)
             {
@@ -927,16 +928,17 @@ namespace KSPSerialIO
                     KSPSerialPort.VData.TargetDist = 0;
                     KSPSerialPort.VData.TargetV = 0;
 
-                        if (TargetExists()) { 
-                            KSPSerialPort.VData.TargetDist = (float)Vector3.Distance(FlightGlobals.fetch.VesselTarget.GetVessel().transform.position, ActiveVessel.transform.position);
-                            KSPSerialPort.VData.TargetV = (float)FlightGlobals.ship_tgtVelocity.magnitude;
-                        }
-                    
+                    if (TargetExists())
+                    {
+                        KSPSerialPort.VData.TargetDist = (float)Vector3.Distance(FlightGlobals.fetch.VesselTarget.GetVessel().transform.position, ActiveVessel.transform.position);
+                        KSPSerialPort.VData.TargetV = (float)FlightGlobals.ship_tgtVelocity.magnitude;
+                    }
 
-                    KSPSerialPort.VData.SASMode = (byte)(((int)FlightGlobals.speedDisplayMode + 1) << 4); //get navball speed display mode
+
+                    KSPSerialPort.VData.NavballSASMode = (byte)(((int)FlightGlobals.speedDisplayMode + 1) << 4); //get navball speed display mode
                     if (ActiveVessel.ActionGroups[KSPActionGroup.SAS])
                     {
-                        KSPSerialPort.VData.SASMode = (byte)(((int)FlightGlobals.ActiveVessel.Autopilot.Mode + 1) | KSPSerialPort.VData.SASMode);
+                        KSPSerialPort.VData.NavballSASMode = (byte)(((int)FlightGlobals.ActiveVessel.Autopilot.Mode + 1) | KSPSerialPort.VData.NavballSASMode);
                     }
 
                     #region debugjunk
@@ -982,6 +984,8 @@ namespace KSPSerialIO
                 if (KSPSerialPort.ControlReceived)
                 {
                     /*
+                    ScreenMessages.PostScreenMessage("Nav Mode " + KSPSerialPort.CPacket.NavballSASMode.ToString());
+                    
                      ScreenMessages.PostScreenMessage("SAS: " + KSPSerialPort.VControls.SAS.ToString() +
                      ", RCS: " + KSPSerialPort.VControls.RCS.ToString() +
                      ", Lights: " + KSPSerialPort.VControls.Lights.ToString() +
@@ -1116,7 +1120,7 @@ namespace KSPSerialIO
                     if (KSPSerialPort.VControls.SASMode != KSPSerialPort.VControlsOld.SASMode)
                     {
                         if (KSPSerialPort.VControls.SASMode != 0 && KSPSerialPort.VControls.SASMode < 11)
-                        {                            
+                        {
                             if (!ActiveVessel.Autopilot.CanSetMode((VesselAutopilot.AutopilotMode)(KSPSerialPort.VControls.SASMode - 1)))
                             {
                                 ScreenMessages.PostScreenMessage("KSPSerialIO: SAS mode " + KSPSerialPort.VControls.SASMode.ToString() + " not avalible");
@@ -1132,17 +1136,18 @@ namespace KSPSerialIO
                     //set navball mode
                     if (KSPSerialPort.VControls.SpeedMode != KSPSerialPort.VControlsOld.SpeedMode)
                     {
-                        if (!((KSPSerialPort.VControls.SpeedMode == 0) || ((KSPSerialPort.VControls.SpeedMode == 3) && !TargetExists()))) {
+                        if (!((KSPSerialPort.VControls.SpeedMode == 0) || ((KSPSerialPort.VControls.SpeedMode == 3) && !TargetExists())))
+                        {
                             FlightGlobals.SetSpeedMode((FlightGlobals.SpeedDisplayModes)(KSPSerialPort.VControls.SpeedMode - 1));
-                          }
+                        }
                         KSPSerialPort.VControlsOld.SpeedMode = KSPSerialPort.VControls.SpeedMode;
                     }
 
 
 
-                        if (Math.Abs(KSPSerialPort.VControls.Pitch) > SettingsNStuff.SASTol ||
-                        Math.Abs(KSPSerialPort.VControls.Roll) > SettingsNStuff.SASTol ||
-                        Math.Abs(KSPSerialPort.VControls.Yaw) > SettingsNStuff.SASTol)
+                    if (Math.Abs(KSPSerialPort.VControls.Pitch) > SettingsNStuff.SASTol ||
+                    Math.Abs(KSPSerialPort.VControls.Roll) > SettingsNStuff.SASTol ||
+                    Math.Abs(KSPSerialPort.VControls.Yaw) > SettingsNStuff.SASTol)
                     {
                         //ActiveVessel.Autopilot.SAS.ManualOverride(true); 
 
