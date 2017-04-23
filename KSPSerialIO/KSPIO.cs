@@ -97,7 +97,7 @@ namespace KSPSerialIO
         public byte MainControls;                  //SAS RCS Lights Gear Brakes Precision Abort Stage 
         public byte Mode;                          //0 = stage, 1 = docking, 2 = map
         public ushort ControlGroup;                //control groups 1-10 in 2 bytes
-        public byte NavballSASMode;                       //AutoPilot mode (See above for AutoPilot modes)(Ignored if the equal to zero or out of bounds (>10)) //Navball mode
+        public byte NavballSASMode;                //AutoPilot mode (See above for AutoPilot modes)(Ignored if the equal to zero or out of bounds (>10)) //Navball mode
         public byte AdditionalControlByte1;
         public short Pitch;                        //-1000 -> 1000
         public short Roll;                         //-1000 -> 1000
@@ -367,7 +367,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.18.6");
+                Debug.Log("KSPSerialIO: Version 0.18.7");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -506,8 +506,8 @@ namespace KSPSerialIO
                             if ((HPacket.M1 == 3) && (HPacket.M2 == 1) && (HPacket.M3 == 4))
                             {
                                 DisplayFound = true;
-
                             }
+
                             else
                             {
                                 DisplayFound = false;
@@ -556,7 +556,8 @@ namespace KSPSerialIO
                     //make sure the binary structs on both Arduino and plugin are the same size.
                     if (rx_len != structSize || rx_len == 0)
                     {
-                        rx_len = 0;
+                        SizeWrong(rx_len, structSize);                         //Debug option ==================
+                        rx_len = 0;                      
                         return false;
                     }
                 }
@@ -587,6 +588,8 @@ namespace KSPSerialIO
                     {//CS good
                         rx_len = 0;
                         rx_array_inx = 1;
+
+                        CheckSumPass();                         //Debug option ==================
                         return true;
                     }
                     else
@@ -594,6 +597,8 @@ namespace KSPSerialIO
                         //failed checksum, need to clear this out anyway
                         rx_len = 0;
                         rx_array_inx = 1;
+
+                        CheckSumFail();                         //Debug option ==================
                         return false;
                     }
                 }
@@ -605,6 +610,21 @@ namespace KSPSerialIO
         private void HandShake()
         {
             Debug.Log("KSPSerialIO: Handshake received - " + HPacket.M1.ToString() + HPacket.M2.ToString() + HPacket.M3.ToString());
+        }
+
+        private static void SizeWrong(int R, int P)
+        {
+            //Debug.Log("KSPSerialIO: Packet Size ERROR - " + R.ToString() + "/" + P.ToString());
+        }
+
+        private static void CheckSumFail()
+        {
+            //Debug.Log("KSPSerialIO: CS FAIL - " + BitConverter.ToString(buffer));
+        }
+
+        private static void CheckSumPass()
+        {
+            //Debug.Log("KSPSerialIO: CS PASS - " + BitConverter.ToString(buffer));
         }
 
         private void VesselControls()
@@ -734,7 +754,11 @@ namespace KSPSerialIO
                 }
 
                 Thread.Sleep(200);
+
+                ActiveVessel.OnPostAutopilotUpdate -= AxisInput;
                 ActiveVessel = FlightGlobals.ActiveVessel;
+                ActiveVessel.OnPostAutopilotUpdate += AxisInput;
+
                 //sync inputs at start
                 ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.RCS, KSPSerialPort.VControls.RCS);
                 ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, KSPSerialPort.VControls.SAS);
@@ -758,9 +782,10 @@ namespace KSPSerialIO
                 /*
                 ActiveVessel.OnFlyByWire -= new FlightInputCallback(AxisInput);
                 ActiveVessel.OnFlyByWire += new FlightInputCallback(AxisInput);
-                */
+                
                 ActiveVessel.OnPostAutopilotUpdate -= AxisInput;
                 ActiveVessel.OnPostAutopilotUpdate += AxisInput;
+                */
             }
             else
             {
