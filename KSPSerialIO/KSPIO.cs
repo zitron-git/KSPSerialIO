@@ -367,7 +367,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.18.7");
+                Debug.Log("KSPSerialIO: Version 0.19.0");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -1176,22 +1176,21 @@ namespace KSPSerialIO
                     {
                         //ActiveVessel.Autopilot.SAS.ManualOverride(true); 
 
-                        if ((ActiveVessel.Autopilot.SAS.lockedMode == true) && (wasSASOn == false))
+                        if ((ActiveVessel.ActionGroups[KSPActionGroup.SAS]) && (wasSASOn == false))
                         {
                             wasSASOn = true;
-                        }
-                        else if (wasSASOn != true)
-                        {
-                            wasSASOn = false;
+                            ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
                         }
 
+                        //ScreenMessages.PostScreenMessage("KSPSerialIO: SAS mode " + wasSASOn);
+
+                        /*
                         if (wasSASOn == true)
-                        {
-                            ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
+                        {                            
                             //ActiveVessel.Autopilot.SAS.lockedMode = false;
                             //ActiveVessel.Autopilot.SAS.dampingMode = true;
                         }
-                        /*                                              
+                                                                      
                         
                         if (KSPSerialPort.VControls.SAS == true)
                         {
