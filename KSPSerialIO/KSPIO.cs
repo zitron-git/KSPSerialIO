@@ -74,11 +74,20 @@ namespace KSPSerialIO
         public float TargetDist;    //53  Distance to targeted vessel (m)
         public float TargetV;       //54  Target vessel relative velocity (m/s)
         public byte NavballSASMode; //55  Combined byte for navball target mode and SAS mode
-        // First four bits indicate AutoPilot mode:
-        // 0 SAS is off  //1 = Regular Stability Assist //2 = Prograde
-        // 3 = RetroGrade //4 = Normal //5 = Antinormal //6 = Radial In
-        // 7 = Radial Out //8 = Target //9 = Anti-Target //10 = Maneuver node
-        // Last 4 bits set navball mode. (0=ignore,1=ORBIT,2=SURFACE,3=TARGET)
+                                    // First four bits indicate AutoPilot mode:
+                                    // 0 SAS is off  //1 = Regular Stability Assist //2 = Prograde
+                                    // 3 = RetroGrade //4 = Normal //5 = Antinormal //6 = Radial In
+                                    // 7 = Radial Out //8 = Target //9 = Anti-Target //10 = Maneuver node
+                                    // Last 4 bits set navball mode. (0=ignore,1=ORBIT,2=SURFACE,3=TARGET)
+
+        public short ProgradePitch;  //56 Pitch   Of the Prograde Vector;  int_16 ranging from (-0x8000(-360 degrees) to 0x7FFF(359.99ish degrees)); 
+        public short ProgradeHeading;//58 Heading Of the Prograde Vector;  see above for range   (Prograde vector depends on navball mode, eg Surface/Orbit/Target)
+        public short ManeuverPitch;  //60 Pitch   Of the Maneuver Vector;  see above for range;  (0 if no Maneuver node)
+        public short ManeuverHeading;//62 Heading Of the Maneuver Vector;  see above for range;  (0 if no Maneuver node)
+        public short TargetPitch;    //64 Pitch   Of the Target   Vector;  see above for range;  (0 if no Target)
+        public short TargetHeading;  //66 Heading Of the Target   Vector;  see above for range;  (0 if no Target)
+        public short NormalHeading;  //68 Heading Of the Prograde Vector;  see above for range;  (Pitch of the Heading Vector is always 0)
+
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -139,6 +148,16 @@ namespace KSPSerialIO
     {
         public float Max;
         public float Current;
+    }
+
+    public struct NavHeading
+    {
+        public float Pitch, Heading;
+        /*  public NavHeading(float Pitch, float Heading)
+          {
+              this.Pitch = Pitch;
+              this.Heading = Heading;
+          }*/
     }
 
     #endregion
@@ -557,7 +576,7 @@ namespace KSPSerialIO
                     if (rx_len != structSize || rx_len == 0)
                     {
                         SizeWrong(rx_len, structSize);                         //Debug option ==================
-                        rx_len = 0;                      
+                        rx_len = 0;
                         return false;
                     }
                 }
@@ -893,10 +912,57 @@ namespace KSPSerialIO
 
                     KSPSerialPort.VData.VOrbit = (float)ActiveVessel.orbit.GetVel().magnitude;
 
-                    //Debug.Log("KSPSerialIO: 4");
-
                     KSPSerialPort.VData.MNTime = 0;
                     KSPSerialPort.VData.MNDeltaV = 0;
+                    
+                    KSPSerialPort.VData.TargetDist = 0;
+                    KSPSerialPort.VData.TargetV = 0;
+
+                    //Debug.Log("KSPSerialIO: 5");
+
+                    Vector3d CoM, north, up, east;
+                    Quaternion rotationSurface;
+                    CoM = ActiveVessel.CoM;
+                    up = (CoM - ActiveVessel.mainBody.position).normalized;
+                    north = Vector3d.Exclude(up, (ActiveVessel.mainBody.position + ActiveVessel.mainBody.transform.up * (float)ActiveVessel.mainBody.Radius) - CoM).normalized;
+                    east = Vector3d.Cross(up, north);
+                    rotationSurface = Quaternion.LookRotation(north, up);
+                    Vector3d attitude = Quaternion.Inverse(Quaternion.Euler(90, 0, 0) * Quaternion.Inverse(ActiveVessel.GetTransform().rotation) * rotationSurface).eulerAngles;
+
+                    KSPSerialPort.VData.Roll = (float)((attitude.z > 180) ? (attitude.z - 360.0) : attitude.z);
+                    KSPSerialPort.VData.Pitch = (float)((attitude.x > 180) ? (360.0 - attitude.x) : -attitude.x);
+                    KSPSerialPort.VData.Heading = (float)attitude.y;
+
+                    Vector3d prograde = new Vector3d(0, 0, 0);
+                    switch (FlightGlobals.speedDisplayMode)
+                    {
+                        case FlightGlobals.SpeedDisplayModes.Surface:
+                            prograde = ActiveVessel.srf_velocity.normalized;
+                            break;
+                        case FlightGlobals.SpeedDisplayModes.Orbit:
+                            prograde = ActiveVessel.obt_velocity.normalized;
+                            break;
+                        case FlightGlobals.SpeedDisplayModes.Target:
+                            prograde = FlightGlobals.ship_tgtVelocity;
+                            break;
+                    }
+
+                    NavHeading zeroHeading; zeroHeading.Pitch = zeroHeading.Heading = 0;
+                    NavHeading Prograde = WorldVecToNavHeading(up, north, east, prograde), Target = zeroHeading, Maneuver = zeroHeading;
+
+                    KSPSerialPort.VData.ProgradeHeading = FloatAngleToFixed_16(Prograde.Heading);
+                    KSPSerialPort.VData.ProgradePitch = FloatAngleToFixed_16(Prograde.Pitch);
+
+                    if (TargetExists())
+                    {
+                        KSPSerialPort.VData.TargetDist = (float)Vector3.Distance(FlightGlobals.fetch.VesselTarget.GetVessel().transform.position, ActiveVessel.transform.position);
+                        KSPSerialPort.VData.TargetV = (float)FlightGlobals.ship_tgtVelocity.magnitude;
+                        Target = WorldVecToNavHeading(up, north, east, ActiveVessel.targetObject.GetTransform().position - ActiveVessel.transform.position);
+                    }
+                    KSPSerialPort.VData.TargetHeading = FloatAngleToFixed_16(Target.Heading);
+                    KSPSerialPort.VData.TargetPitch = FloatAngleToFixed_16(Target.Pitch);
+
+                    KSPSerialPort.VData.NormalHeading = FloatAngleToFixed_16(WorldVecToNavHeading(up, north, east, Vector3d.Cross(ActiveVessel.obt_velocity.normalized, up)).Heading);
 
                     if (ActiveVessel.patchedConicSolver != null)
                     {
@@ -905,19 +971,14 @@ namespace KSPSerialIO
                             if (ActiveVessel.patchedConicSolver.maneuverNodes.Count > 0)
                             {
                                 KSPSerialPort.VData.MNTime = (UInt32)Math.Round(ActiveVessel.patchedConicSolver.maneuverNodes[0].UT - Planetarium.GetUniversalTime());
-                                //KSPSerialPort.VData.MNDeltaV = (float)ActiveVessel.patchedConicSolver.maneuverNodes[0].DeltaV.magnitude;
                                 KSPSerialPort.VData.MNDeltaV = (float)ActiveVessel.patchedConicSolver.maneuverNodes[0].GetBurnVector(ActiveVessel.patchedConicSolver.maneuverNodes[0].patch).magnitude; //Added JS
+
+                                Maneuver = WorldVecToNavHeading(up, north, east, ActiveVessel.patchedConicSolver.maneuverNodes[0].GetBurnVector(ActiveVessel.patchedConicSolver.maneuverNodes[0].patch));
                             }
                         }
                     }
-
-                    //Debug.Log("KSPSerialIO: 5");
-
-                    Quaternion attitude = updateHeadingPitchRollField(ActiveVessel);
-
-                    KSPSerialPort.VData.Roll = (float)((attitude.eulerAngles.z > 180) ? (attitude.eulerAngles.z - 360.0) : attitude.eulerAngles.z);
-                    KSPSerialPort.VData.Pitch = (float)((attitude.eulerAngles.x > 180) ? (360.0 - attitude.eulerAngles.x) : -attitude.eulerAngles.x);
-                    KSPSerialPort.VData.Heading = (float)attitude.eulerAngles.y;
+                    KSPSerialPort.VData.ManeuverHeading = FloatAngleToFixed_16(Maneuver.Heading);
+                    KSPSerialPort.VData.ManeuverPitch = FloatAngleToFixed_16(Maneuver.Pitch);
 
                     KSPSerialPort.ControlStatus((int)enumAG.SAS, ActiveVessel.ActionGroups[KSPActionGroup.SAS]);
                     KSPSerialPort.ControlStatus((int)enumAG.RCS, ActiveVessel.ActionGroups[KSPActionGroup.RCS]);
@@ -947,18 +1008,6 @@ namespace KSPSerialIO
 
                     KSPSerialPort.VData.CurrentStage = (byte)StageManager.CurrentStage;
                     KSPSerialPort.VData.TotalStage = (byte)StageManager.StageCount;
-
-                    //target distance and velocity stuff                    
-
-                    KSPSerialPort.VData.TargetDist = 0;
-                    KSPSerialPort.VData.TargetV = 0;
-
-                    if (TargetExists())
-                    {
-                        KSPSerialPort.VData.TargetDist = (float)Vector3.Distance(FlightGlobals.fetch.VesselTarget.GetVessel().transform.position, ActiveVessel.transform.position);
-                        KSPSerialPort.VData.TargetV = (float)FlightGlobals.ship_tgtVelocity.magnitude;
-                    }
-
 
                     KSPSerialPort.VData.NavballSASMode = (byte)(((int)FlightGlobals.speedDisplayMode + 1) << 4); //get navball speed display mode
                     if (ActiveVessel.ActionGroups[KSPActionGroup.SAS])
@@ -1228,6 +1277,24 @@ namespace KSPSerialIO
         }
 
         #region utilities
+        private static short FloatAngleToFixed_16(float f) //convert a number in the range of [-360,360) to [-0x8000,0x7FFF)
+        {
+            return (short)(((int)(f / 360.0f * (float)(0x8000))) & 0xFFFF);
+        }
+
+        private static NavHeading WorldVecToNavHeading(Vector3d up, Vector3d north, Vector3d east, Vector3d v)
+        {
+            NavHeading ret = new NavHeading();
+            ret.Pitch = (float)-((Vector3d.Angle(up, v)) - 90.0f);
+            Vector3d progradeFlat = Vector3d.Exclude(up, v);
+            float NAngle = (float)Vector3d.Angle(north, progradeFlat);
+            float EAngle = (float)Vector3d.Angle(east, progradeFlat);
+            if (EAngle < 90)
+                ret.Heading = NAngle;
+            else
+                ret.Heading = -NAngle + 360;
+            return ret;
+        }
 
         private Boolean TargetExists()
         {
@@ -1677,18 +1744,6 @@ namespace KSPSerialIO
             }
 
             return ret;
-        }
-
-        //Borrowed from MechJeb2
-        private Quaternion updateHeadingPitchRollField(Vessel v)
-        {
-            Vector3d CoM, north, up;
-            Quaternion rotationSurface;
-            CoM = v.CoM;
-            up = (CoM - v.mainBody.position).normalized;
-            north = Vector3d.Exclude(up, (v.mainBody.position + v.mainBody.transform.up * (float)v.mainBody.Radius) - CoM).normalized;
-            rotationSurface = Quaternion.LookRotation(north, up);
-            return Quaternion.Inverse(Quaternion.Euler(90, 0, 0) * Quaternion.Inverse(v.GetTransform().rotation) * rotationSurface);
         }
 
         #endregion
