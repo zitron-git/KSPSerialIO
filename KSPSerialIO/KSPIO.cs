@@ -8,6 +8,7 @@ using System.Threading;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
 
+using System.Text.RegularExpressions;
 using OpenNETCF.IO.Ports;
 using UnityEngine;
 using KSP.IO;
@@ -79,13 +80,13 @@ namespace KSPSerialIO
                                      // 3 = RetroGrade //4 = Normal //5 = Antinormal //6 = Radial In
                                      // 7 = Radial Out //8 = Target //9 = Anti-Target //10 = Maneuver node
                                      // Last 4 bits set navball mode. (0=ignore,1=ORBIT,2=SURFACE,3=TARGET)
-        public short ProgradePitch;  //56 Pitch   Of the Prograde Vector;  int_16 ranging from (-0x8000(-360 degrees) to 0x7FFF(359.99ish degrees)); 
+        public short ProgradePitch;  //56 Pitch   Of the Prograde Vector;  int_16 ***Changed: now fix point, actual angle = angle/50*** used to be (-0x8000(-360 degrees) to 0x7FFF(359.99ish degrees)); 
         public short ProgradeHeading;//57 Heading Of the Prograde Vector;  see above for range   (Prograde vector depends on navball mode, eg Surface/Orbit/Target)
         public short ManeuverPitch;  //58 Pitch   Of the Maneuver Vector;  see above for range;  (0 if no Maneuver node)
         public short ManeuverHeading;//59 Heading Of the Maneuver Vector;  see above for range;  (0 if no Maneuver node)
         public short TargetPitch;    //60 Pitch   Of the Target   Vector;  see above for range;  (0 if no Target)
         public short TargetHeading;  //61 Heading Of the Target   Vector;  see above for range;  (0 if no Target)
-        public short NormalHeading;  //62 Heading Of the Prograde Vector;  see above for range;  (Pitch of the Heading Vector is always 0)
+        public short NormalHeading;  //62 Normal Of the Prograde Vector;  see above for range;  (Pitch of the Heading Vector is always 0)
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -266,6 +267,7 @@ namespace KSPSerialIO
     {
         public static SerialPort Port;
         public static string PortNumber;
+        public static string Win32PortName;
         public static Boolean DisplayFound = false;
         public static Boolean ControlReceived = false;
 
@@ -315,7 +317,8 @@ namespace KSPSerialIO
 
         private void Begin()
         {
-            Port = new SerialPort(PortNumber, SettingsNStuff.BaudRate, Parity.None, 8, StopBits.One);
+            Port = new SerialPort(Win32PortName, SettingsNStuff.BaudRate, Parity.None, 8, StopBits.One);
+            //Port = new SerialPort();
             Port.ReceivedBytesThreshold = 3;
             Port.ReceivedEvent += Port_ReceivedEvent;
         }
@@ -384,7 +387,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.19.1");
+                Debug.Log("KSPSerialIO: Version 0.19.2");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -426,7 +429,11 @@ namespace KSPSerialIO
                                 Debug.Log("KSPSerialIO: trying port " + PortName + " - " + PortNumber);
                             }
 
-                            Port.PortName = PortNumber;
+                            Win32PortName = @"\\.\" + PortNumber;   // add @"\\.\" to PortNumber to have win10 compatibility for com ports > 9 --- Jimbofarrar
+
+                            Port.PortName = Win32PortName;
+
+                            //Port.PortName = PortNumber; // Original ---Zitron
 
                             j++;
 
@@ -438,7 +445,7 @@ namespace KSPSerialIO
                                 }
                                 catch (Exception e)
                                 {
-                                    Debug.Log("Error opening serial port " + Port.PortName + ": " + e.Message);
+                                    Debug.Log("Error opening serial port " + Win32PortName + ": " + e.Message);
                                 }
 
                                 //secret handshake
@@ -462,7 +469,7 @@ namespace KSPSerialIO
                                     Port.Close();
                                     if (DisplayFound)
                                     {
-                                        Debug.Log("KSPSerialIO: found KSP Display at " + Port.PortName);
+                                        Debug.Log("KSPSerialIO: found KSP Display at " + Win32PortName);
                                         break;
                                     }
                                     else
@@ -473,13 +480,13 @@ namespace KSPSerialIO
                                 else if (Port.IsOpen && (SettingsNStuff.HandshakeDisable == 1))
                                 {
                                     DisplayFound = true;
-                                    Debug.Log("KSPSerialIO: Handshake disabled, using " + Port.PortName);
+                                    Debug.Log("KSPSerialIO: Handshake disabled, using " + Win32PortName);
                                     break;
                                 }
                             }
                             else
                             {
-                                Debug.Log("KSPSerialIO: " + PortNumber + "is already being used.");
+                                Debug.Log("KSPSerialIO: " + Win32PortName + "is already being used.");
                             }
                         }
                     }
@@ -749,22 +756,23 @@ namespace KSPSerialIO
             {
                 if (!KSPSerialPort.Port.IsOpen)
                 {
-                    ScreenMessages.PostScreenMessage("Starting serial port " + KSPSerialPort.Port.PortName, 10f, KSPIOScreenStyle);
+                    ScreenMessages.PostScreenMessage("Starting serial port " + KSPSerialPort.Win32PortName, 10f, KSPIOScreenStyle);
 
                     try
                     {
+                        KSPSerialPort.Port.PortName = KSPSerialPort.Win32PortName;
                         KSPSerialPort.Port.Open();
                         Thread.Sleep(SettingsNStuff.HandshakeDelay);
                     }
                     catch (Exception e)
                     {
-                        ScreenMessages.PostScreenMessage("Error opening serial port " + KSPSerialPort.Port.PortName, 10f, KSPIOScreenStyle);
+                        ScreenMessages.PostScreenMessage("Error opening serial port " + KSPSerialPort.Win32PortName, 10f, KSPIOScreenStyle);
                         ScreenMessages.PostScreenMessage(e.Message, 10f, KSPIOScreenStyle);
                     }
                 }
                 else
                 {
-                    ScreenMessages.PostScreenMessage("Using serial port " + KSPSerialPort.Port.PortName, 10f, KSPIOScreenStyle);
+                    ScreenMessages.PostScreenMessage("Using serial port " + KSPSerialPort.Win32PortName, 10f, KSPIOScreenStyle);
 
                     if (SettingsNStuff.HandshakeDisable == 1)
                         ScreenMessages.PostScreenMessage("Handshake disabled");
