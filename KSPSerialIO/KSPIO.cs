@@ -387,7 +387,7 @@ namespace KSPSerialIO
             }
             else
             {
-                Debug.Log("KSPSerialIO: Version 0.19.2");
+                Debug.Log("KSPSerialIO: Version 0.19.3b");
                 Debug.Log("KSPSerialIO: Getting serial ports...");
                 Debug.Log("KSPSerialIO: Output packet size: " + Marshal.SizeOf(VData).ToString() + "/255");
                 initializeDataPackets();
@@ -638,17 +638,17 @@ namespace KSPSerialIO
 
         private static void SizeWrong(int R, int P)
         {
-            //Debug.Log("KSPSerialIO: Packet Size ERROR - " + R.ToString() + "/" + P.ToString());
+            Debug.Log("KSPSerialIO: Packet Size ERROR - " + R.ToString() + "/" + P.ToString());
         }
 
         private static void CheckSumFail()
         {
-            //Debug.Log("KSPSerialIO: CS FAIL - " + BitConverter.ToString(buffer));
+            Debug.Log("KSPSerialIO: CS FAIL - " + BitConverter.ToString(buffer));
         }
 
         private static void CheckSumPass()
         {
-            //Debug.Log("KSPSerialIO: CS PASS - " + BitConverter.ToString(buffer));
+            Debug.Log("KSPSerialIO: CS PASS - " + BitConverter.ToString(buffer));
         }
 
         private void VesselControls()
@@ -1224,7 +1224,7 @@ namespace KSPSerialIO
                     }
 
 
-
+                    /* Getting rid of this per c4ooo suggestions
                     if (Math.Abs(KSPSerialPort.VControls.Pitch) > SettingsNStuff.SASTol ||
                     Math.Abs(KSPSerialPort.VControls.Roll) > SettingsNStuff.SASTol ||
                     Math.Abs(KSPSerialPort.VControls.Yaw) > SettingsNStuff.SASTol)
@@ -1239,20 +1239,20 @@ namespace KSPSerialIO
 
                         //ScreenMessages.PostScreenMessage("KSPSerialIO: SAS mode " + wasSASOn);
 
-                        /*
-                        if (wasSASOn == true)
-                        {                            
+                        
+                        //if (wasSASOn == true)
+                        //{                            
                             //ActiveVessel.Autopilot.SAS.lockedMode = false;
                             //ActiveVessel.Autopilot.SAS.dampingMode = true;
-                        }
+                        //}
                                                                       
                         
-                        if (KSPSerialPort.VControls.SAS == true)
-                        {
-                            KSPSerialPort.VControls.SAS = false;
-                            KSPSerialPort.VControlsOld.SAS = false;
-                        }
-                         */
+                        //if (KSPSerialPort.VControls.SAS == true)
+                        //{
+                        //    KSPSerialPort.VControls.SAS = false;
+                        //    KSPSerialPort.VControlsOld.SAS = false;
+                        //}
+                        
                         //KSPSerialPort.VControlsOld.Pitch = KSPSerialPort.VControls.Pitch;
                         //KSPSerialPort.VControlsOld.Roll = KSPSerialPort.VControls.Roll;
                         //KSPSerialPort.VControlsOld.Yaw = KSPSerialPort.VControls.Yaw;
@@ -1267,6 +1267,8 @@ namespace KSPSerialIO
                             //ActiveVessel.Autopilot.SAS.dampingMode = false;
                         }
                     }
+                    */
+                
 
                     KSPSerialPort.ControlReceived = false;
                 } //end ControlReceived
